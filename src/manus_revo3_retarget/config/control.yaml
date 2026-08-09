@@ -7,36 +7,38 @@ manus_revo3_retarget:
     retarget_target_topic_suffix: joint_forward_mit_controller/retarget_targets
     mit_command_publish_hz: 200.0
     mit_velocity_feedforward_enabled: true
-    mit_default_kp: 0.2
-    mit_default_kd: 0.02
+    # Grip strength: higher kp = stronger tracking / firmer grasp.
+    # Was 1.0 / 0.1; raised again for firmer grasp (watch motor overcurrent).
+    mit_default_kp: 2.0
+    mit_default_kd: 0.2
 
     # Per-joint MIT gains. Set to -1 to use mit_default_kp / mit_default_kd.
-    mit_left_little_MPR_joint_kp: 0.7
-    mit_left_little_MPR_joint_kd: 0.08
+    mit_left_little_MPR_joint_kp: 2.0
+    mit_left_little_MPR_joint_kd: 0.2
     mit_left_little_MCP_joint_kp: -1.0
     mit_left_little_MCP_joint_kd: -1.0
     mit_left_little_PIP_joint_kp: -1.0
     mit_left_little_PIP_joint_kd: -1.0
     mit_left_little_DIP_joint_kp: -1.0
     mit_left_little_DIP_joint_kd: -1.0
-    mit_left_ring_MPR_joint_kp: 0.7
-    mit_left_ring_MPR_joint_kd: 0.08
+    mit_left_ring_MPR_joint_kp: 2.0
+    mit_left_ring_MPR_joint_kd: 0.2
     mit_left_ring_MCP_joint_kp: -1.0
     mit_left_ring_MCP_joint_kd: -1.0
     mit_left_ring_PIP_joint_kp: -1.0
     mit_left_ring_PIP_joint_kd: -1.0
     mit_left_ring_DIP_joint_kp: -1.0
     mit_left_ring_DIP_joint_kd: -1.0
-    mit_left_middle_MPR_joint_kp: 0.7
-    mit_left_middle_MPR_joint_kd: 0.08
+    mit_left_middle_MPR_joint_kp: 2.0
+    mit_left_middle_MPR_joint_kd: 0.2
     mit_left_middle_MCP_joint_kp: -1.0
     mit_left_middle_MCP_joint_kd: -1.0
     mit_left_middle_PIP_joint_kp: -1.0
     mit_left_middle_PIP_joint_kd: -1.0
     mit_left_middle_DIP_joint_kp: -1.0
     mit_left_middle_DIP_joint_kd: -1.0
-    mit_left_index_MPR_joint_kp: 0.7
-    mit_left_index_MPR_joint_kd: 0.08
+    mit_left_index_MPR_joint_kp: 2.0
+    mit_left_index_MPR_joint_kd: 0.2
     mit_left_index_MCP_joint_kp: -1.0
     mit_left_index_MCP_joint_kd: -1.0
     mit_left_index_PIP_joint_kp: -1.0
@@ -54,32 +56,32 @@ manus_revo3_retarget:
     mit_left_thumb_CMR_joint_kp: -1.0
     mit_left_thumb_CMR_joint_kd: -1.0
 
-    mit_right_little_MPR_joint_kp: 0.7
-    mit_right_little_MPR_joint_kd: 0.08
+    mit_right_little_MPR_joint_kp: 2.0
+    mit_right_little_MPR_joint_kd: 0.2
     mit_right_little_MCP_joint_kp: -1.0
     mit_right_little_MCP_joint_kd: -1.0
     mit_right_little_PIP_joint_kp: -1.0
     mit_right_little_PIP_joint_kd: -1.0
     mit_right_little_DIP_joint_kp: -1.0
     mit_right_little_DIP_joint_kd: -1.0
-    mit_right_ring_MPR_joint_kp: 0.7
-    mit_right_ring_MPR_joint_kd: 0.08
+    mit_right_ring_MPR_joint_kp: 2.0
+    mit_right_ring_MPR_joint_kd: 0.2
     mit_right_ring_MCP_joint_kp: -1.0
     mit_right_ring_MCP_joint_kd: -1.0
     mit_right_ring_PIP_joint_kp: -1.0
     mit_right_ring_PIP_joint_kd: -1.0
     mit_right_ring_DIP_joint_kp: -1.0
     mit_right_ring_DIP_joint_kd: -1.0
-    mit_right_middle_MPR_joint_kp: 0.7
-    mit_right_middle_MPR_joint_kd: 0.08
+    mit_right_middle_MPR_joint_kp: 2.0
+    mit_right_middle_MPR_joint_kd: 0.2
     mit_right_middle_MCP_joint_kp: -1.0
     mit_right_middle_MCP_joint_kd: -1.0
     mit_right_middle_PIP_joint_kp: -1.0
     mit_right_middle_PIP_joint_kd: -1.0
     mit_right_middle_DIP_joint_kp: -1.0
     mit_right_middle_DIP_joint_kd: -1.0
-    mit_right_index_MPR_joint_kp: 0.7
-    mit_right_index_MPR_joint_kd: 0.08
+    mit_right_index_MPR_joint_kp: 2.0
+    mit_right_index_MPR_joint_kd: 0.2
     mit_right_index_MCP_joint_kp: -1.0
     mit_right_index_MCP_joint_kd: -1.0
     mit_right_index_PIP_joint_kp: -1.0

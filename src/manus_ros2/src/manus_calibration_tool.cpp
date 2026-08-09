@@ -23,6 +23,7 @@ namespace
 struct Options
 {
     std::filesystem::path calibration_directory;
+    std::optional<std::filesystem::path> license_file;
     std::optional<uint32_t> glove_id;
     std::optional<Side> side;
     std::optional<DeviceFamilyType> family;
@@ -31,6 +32,7 @@ struct Options
     bool list_only = false;
     bool export_current = false;
     bool overwrite = false;
+    bool set_license_only = false;
     bool verbose_sdk_logs = false;
     int wait_seconds = 20;
 };
@@ -105,12 +107,13 @@ void PrintUsage()
         << "  --family FAMILY                Select glove family slug, e.g. metagloveproprecision\n"
         << "  --glove-id ID                  Select exact MANUS glove id\n"
         << "  --calibration-directory PATH   Directory for .mcal files\n"
+        << "  --set-license [PATH]           Write .lic onto the connected dongle (default ~/Documents/manus-licenses/license.lic)\n"
         << "  --export-current               Save current calibration without running a new calibration\n"
         << "  --overwrite                    Replace an existing .mcal without asking\n"
         << "  --core                         Use Core connection initialization instead of integrated\n"
         << "  --ip ADDRESS                   Connect to a specific MANUS Core host IP\n"
         << "  --verbose-sdk-logs             Show all MANUS SDK logs\n"
-        << "  --wait-seconds N               Seconds to wait for glove landscape, default 20\n"
+        << "  --wait-seconds N               Seconds to wait for glove/dongle landscape, default 20\n"
         << "  --help                         Show this help\n";
 }
 
@@ -177,6 +180,19 @@ Options ParseArgs(int argc, char* argv[])
         else if (arg == "--calibration-directory")
         {
             options.calibration_directory = manus_ros2::ExpandUserPath(require_value(arg));
+        }
+        else if (arg == "--set-license")
+        {
+            options.set_license_only = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-')
+            {
+                options.license_file = manus_ros2::ExpandUserPath(require_value(arg));
+            }
+            else
+            {
+                options.license_file =
+                    manus_ros2::ExpandUserPath("~/Documents/manus-licenses/license.lic");
+            }
         }
         else if (arg == "--export-current")
         {
@@ -324,23 +340,90 @@ private:
     bool initialized_ = false;
 };
 
-Landscape WaitForLandscape(int wait_seconds)
+Landscape WaitForLandscape(int wait_seconds, bool require_gloves)
 {
     std::unique_lock<std::mutex> lock(g_landscape_mutex);
     const bool ready = g_landscape_cv.wait_for(
         lock,
         std::chrono::seconds(wait_seconds),
-        [] {
-            return g_landscape.has_value() &&
-                g_landscape->gloveDevices.gloveCount > 0;
+        [require_gloves] {
+            if (!g_landscape.has_value())
+            {
+                return false;
+            }
+            if (require_gloves)
+            {
+                return g_landscape->gloveDevices.gloveCount > 0;
+            }
+            return g_landscape->gloveDevices.dongleCount > 0;
         });
 
     if (!ready)
     {
-        throw std::runtime_error("Timed out waiting for connected MANUS gloves");
+        throw std::runtime_error(
+            require_gloves
+                ? "Timed out waiting for connected MANUS gloves"
+                : "Timed out waiting for connected MANUS dongle");
     }
 
     return *g_landscape;
+}
+
+std::vector<char> ReadLicenseFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (!input.is_open())
+    {
+        throw std::runtime_error("Could not open license file: " + path.string());
+    }
+
+    input.seekg(0, std::ios::end);
+    const std::streamoff length = input.tellg();
+    input.seekg(0, std::ios::beg);
+    if (length <= 0)
+    {
+        throw std::runtime_error("License file is empty: " + path.string());
+    }
+
+    std::vector<char> data(static_cast<size_t>(length));
+    input.read(data.data(), length);
+    if (!input)
+    {
+        throw std::runtime_error("Failed reading license file: " + path.string());
+    }
+    return data;
+}
+
+void ApplyLicense(const Landscape& landscape, const std::filesystem::path& license_path)
+{
+    if (landscape.gloveDevices.dongleCount == 0)
+    {
+        throw std::runtime_error("No MANUS dongle found while applying license");
+    }
+
+    const auto license_data = ReadLicenseFile(license_path);
+    const uint32_t dongle_id = landscape.gloveDevices.dongles[0].id;
+    bool success = false;
+    char response[MAX_NUM_CHARS_IN_RESPONSE] = {};
+
+    std::cout << "Applying license " << license_path
+              << " to dongle id=" << dongle_id << " ...\n";
+
+    if (!SdkOk(
+            CoreSdk_SetLicense(
+                dongle_id,
+                license_data.data(),
+                static_cast<uint32_t>(license_data.size()),
+                &success,
+                response),
+            "SetLicense") ||
+        !success)
+    {
+        const std::string detail = response[0] != '\0' ? response : "unknown error";
+        throw std::runtime_error("Failed to set MANUS license: " + detail);
+    }
+
+    std::cout << "License set successfully on dongle " << dongle_id << "\n";
 }
 
 std::vector<GloveLandscapeData> FilterGloves(const Landscape& landscape, const Options& options)
@@ -580,7 +663,23 @@ int Run(int argc, char* argv[])
     const Options options = ParseArgs(argc, argv);
 
     SdkSession session(options);
-    const Landscape landscape = WaitForLandscape(options.wait_seconds);
+
+    if (options.set_license_only)
+    {
+        const Landscape landscape = WaitForLandscape(options.wait_seconds, false);
+        ApplyLicense(landscape, *options.license_file);
+        if (options.list_only && landscape.gloveDevices.gloveCount > 0)
+        {
+            PrintGloves(FilterGloves(landscape, options));
+        }
+        else if (options.list_only)
+        {
+            std::cout << "Dongle ready; no gloves connected yet.\n";
+        }
+        return 0;
+    }
+
+    const Landscape landscape = WaitForLandscape(options.wait_seconds, true);
     const std::vector<GloveLandscapeData> gloves = FilterGloves(landscape, options);
 
     if (options.list_only)
