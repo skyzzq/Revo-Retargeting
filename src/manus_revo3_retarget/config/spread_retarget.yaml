@@ -2,9 +2,9 @@
 manus_revo3_retarget:
   ros__parameters:
     legacy_left_physical_index_spread_offset_deg: 15.0
-    legacy_left_physical_middle_spread_offset_deg: 15.0
-    legacy_left_physical_ring_spread_offset_deg: 15.0
-    legacy_left_physical_pinky_spread_offset_deg: 15.0
+    legacy_left_physical_middle_spread_offset_deg: -5.0
+    legacy_left_physical_ring_spread_offset_deg: -5.0
+    legacy_left_physical_pinky_spread_offset_deg: 0.0
     legacy_left_physical_index_spread_scale: -1.0
     legacy_left_physical_middle_spread_scale: -1.0
     legacy_left_physical_ring_spread_scale: -1.0
