@@ -14,6 +14,8 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SETUP="${WORKSPACE}/install/setup.bash"
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/revo3_common.sh"
 
 if [[ ! -f "${SETUP}" ]]; then
   echo "[teleop_revo3] Missing ${SETUP}. Run python -m colcon build --symlink-install first." >&2
@@ -22,10 +24,23 @@ fi
 
 START_MANUS_PUBLISHER="${START_MANUS_PUBLISHER:-1}"
 START_REVO3_DRIVER="${START_REVO3_DRIVER:-1}"
+# When driver is external (START_REVO3_DRIVER=0), wait/ensure MIT is active first.
+REVO3_WAIT_MIT="${REVO3_WAIT_MIT:-1}"
+REVO3_ACTIVATE_WAIT_SEC="${REVO3_ACTIVATE_WAIT_SEC:-20}"
+REVO3_ACTIVATE_TIMEOUT_SEC="${REVO3_ACTIVATE_TIMEOUT_SEC:-15}"
+ACTIVATE_PY="${SCRIPT_DIR}/activate_revo3_controllers.py"
 
+revo3_maybe_activate_conda
 set +u
+# Ensure ROS underlay is present (workspace setup alone is not enough from a bare shell).
+if [[ -f /opt/ros/humble/setup.bash ]]; then
+  # shellcheck source=/dev/null
+  source /opt/ros/humble/setup.bash
+fi
+# shellcheck source=/dev/null
 source "${SETUP}"
 set -u
+REVO3_PYTHON="$(revo3_resolve_python)"
 
 managed_pids=()
 
@@ -115,6 +130,12 @@ trap handle_signal INT TERM
 
 if [[ "${START_REVO3_DRIVER}" == "1" ]]; then
   start_managed "Revo3 driver" "${SCRIPT_DIR}/start_revo3_driver.sh" "${MODE}"
+elif [[ "${REVO3_WAIT_MIT}" == "1" ]]; then
+  echo "[teleop_revo3] Driver external — ensuring MIT controllers active (${MODE})..."
+  "${REVO3_PYTHON}" "${ACTIVATE_PY}" "${MODE}" \
+    --wait-loaded "${REVO3_ACTIVATE_WAIT_SEC}" \
+    --timeout "${REVO3_ACTIVATE_TIMEOUT_SEC}" \
+    --poll 0.25
 fi
 
 if [[ "${START_MANUS_PUBLISHER}" == "1" ]]; then
