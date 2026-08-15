@@ -400,9 +400,13 @@ private:
     out.joint_names = state->names;
     out.position.assign(q.begin(), q.end());
     apply_output_calibration(*state, out.position);
+    clamp_index_flexion_lower_limit(out.position);
     apply_hold_fingers(*state, out.position);
-    update_pinch_soften(*state, out.position);
     filter_command(*state, out.position);
+    // Use the filtered command for the pinch gate. The gate then changes the
+    // next glove frame's filter mode, avoiding a circular dependency while
+    // rejecting single-frame MANUS target spikes.
+    update_pinch_soften(*state, out.position);
     out.velocity.assign(state->names.size(), 0.0);
     out.effort.assign(state->names.size(), 0.0);
     out.kp = state->kp;
@@ -894,6 +898,17 @@ private:
   static bool is_thumb_flexion_joint(std::size_t index)
   {
     return index == ThumbMCP || index == ThumbPIP || index == ThumbDIP || index == ThumbCMP;
+  }
+
+  static void clamp_index_flexion_lower_limit(std::vector<double> & position)
+  {
+    static constexpr std::array<std::size_t, 3> kIndexFlexion = {
+      IndexMCP, IndexPIP, IndexDIP};
+    for (const std::size_t index : kIndexFlexion) {
+      if (index < position.size()) {
+        position[index] = std::max(0.0, position[index]);
+      }
+    }
   }
 
   void filter_command(SideState & state, std::vector<double> & position) const

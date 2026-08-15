@@ -162,7 +162,7 @@ if [[ "${START_REVO3_DRIVER}" == "1" ]]; then
 fi
 
 # Wait for MIT before MANUS Core / retarget. Starting all three at once
-# contends CPU with controller_manager spawners and makes the first seconds stutter.
+# contends CPU with controller_manager and makes the first seconds stutter.
 if [[ "${REVO3_WAIT_MIT}" == "1" ]]; then
   echo "[teleop_revo3] Waiting for MIT controllers (${MODE}) before teleop..."
   "${REVO3_PYTHON}" "${ACTIVATE_PY}" "${MODE}" \

@@ -1,0 +1,40 @@
+{
+  "created_local": "2026-08-15T23:14:21",
+  "pid": 136329,
+  "hand_mode": "left",
+  "duration_requested_s": 30.0,
+  "joint_suffixes": [
+    "little_MPR_joint",
+    "little_MCP_joint",
+    "little_PIP_joint",
+    "little_DIP_joint",
+    "ring_MPR_joint",
+    "ring_MCP_joint",
+    "ring_PIP_joint",
+    "ring_DIP_joint",
+    "middle_MPR_joint",
+    "middle_MCP_joint",
+    "middle_PIP_joint",
+    "middle_DIP_joint",
+    "index_MPR_joint",
+    "index_MCP_joint",
+    "index_PIP_joint",
+    "index_DIP_joint",
+    "thumb_MCP_joint",
+    "thumb_PIP_joint",
+    "thumb_DIP_joint",
+    "thumb_CMP_joint",
+    "thumb_CMR_joint"
+  ],
+  "key_joints": [
+    "index_MCP_joint",
+    "middle_MCP_joint",
+    "index_MPR_joint",
+    "thumb_MCP_joint"
+  ],
+  "ergo_keys": [
+    "IndexMCPStretch",
+    "MiddleMCPStretch",
+    "PinkyMCPStretch"
+  ]
+}

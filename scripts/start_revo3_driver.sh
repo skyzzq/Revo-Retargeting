@@ -4,8 +4,9 @@
 # Successful dual-hand bring-up lessons:
 # - Kill leftovers / free /dev/ttyUSB* before launch.
 # - Prefer sequential left -> activate MIT -> right -> activate MIT
-#   (parallel dual launch often starves controller_manager spawners).
-# - Spawners may time out after load; activate via activate_revo3_controllers.py.
+#   (parallel dual launch can starve controller_manager).
+# - joint_state + MIT come up via YAML activate_on_configure; confirm with
+#   activate_revo3_controllers.py (do not re-spawn already-active controllers).
 # - Require non-empty SN in logs (left BCUBL..., right BCUBR...) before "ready".
 # - Manual MIT commands need --rate (not --once); command_timeout_sec≈0.25s.
 set -euo pipefail

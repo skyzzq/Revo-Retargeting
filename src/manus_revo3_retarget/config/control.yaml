@@ -16,8 +16,9 @@ manus_revo3_retarget:
     # Task overlays (config/profiles/{blocks,unbox}.yaml) override hold / pinch / kp.
     # Default launch task:=blocks matches these values. Use task:=unbox for full-hand grasp.
     # Pinch hold damps contact tremor. Opening during/after pinch uses release EMA
-    # (not idle 0.55). Gate enter 28/16, exit 16/8 with 150 ms debounce
-    # (not 8 deg: index calibration offset is +8 deg, which deadlocked open).
+    # (not idle 0.55). The gate reads filtered commands after index flexion is
+    # clamped to >=0 deg. It latches at enter 28/16 and exits at 16/8 only after
+    # 150 ms continuously below threshold, so one-frame glove spikes cannot switch modes.
     # After a 2 deg open gap, thumb flexion is ratcheted (no extra shove).
     pinch_soften_enabled: true
     pinch_index_mcp_enter_deg: 28.0
