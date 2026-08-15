@@ -181,6 +181,12 @@ start_managed "Revo3 retarget" ros2 launch manus_revo3_retarget pipeline_launch.
   launch_manus_publisher:=false \
   "$@"
 
+TELEOP_MONITOR="${TELEOP_MONITOR:-0}"
+if [[ "${TELEOP_MONITOR}" == "1" ]]; then
+  start_managed "teleop monitor" nice -n 15 "${REVO3_PYTHON}" "${SCRIPT_DIR}/teleop_monitor.py" \
+    --hand-mode "${MODE}" --period "${TELEOP_MONITOR_PERIOD:-2}"
+fi
+
 ENABLE_KEYBOARD_ACTIONS="${ENABLE_KEYBOARD_ACTIONS:-0}"
 if [[ "${ENABLE_KEYBOARD_ACTIONS}" == "1" && -t 0 ]]; then
   echo "[teleop_revo3] Keyboard actions: 1=open 2=fist 3=pinch 4=point 5=ok 0=glove  h=help"

@@ -1,10 +1,19 @@
 ---
 # Task overlay: block building. Loaded after control.yaml.
+# Pinch gate on; idle/close/hold/release filtering (see control.yaml).
 manus_revo3_retarget:
   ros__parameters:
     hold_unused_fingers: true
     hold_left_fingers: [little, ring, middle]
     hold_right_fingers: [little, ring, middle]
     pinch_soften_enabled: true
+    pinch_command_ema_alpha: 0.10
+    pinch_command_max_delta_deg: 1.5
+    pinch_command_deadband_deg: 1.0
+    pinch_interpolation_horizon_s: 0.040
+    pinch_release_ema_alpha: 0.15
+    pinch_release_max_delta_deg: 2.0
+    pinch_release_interpolation_horizon_s: 0.040
+    pinch_release_blend_s: 0.25
     mit_default_kp: 1.6
     mit_default_kd: 0.4

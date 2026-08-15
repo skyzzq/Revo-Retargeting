@@ -38,6 +38,7 @@ TELEOP_PATS=(
   'manus_revo3_retarget/pipeline_launch'
   'pipeline_launch\.py'
   'keyboard_action'
+  'teleop_monitor\.py'
 )
 
 DRIVER_PATS=(
