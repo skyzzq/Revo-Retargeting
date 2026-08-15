@@ -37,21 +37,23 @@ TELEOP_PATS=(
   'retarget_node'
   'manus_revo3_retarget/pipeline_launch'
   'pipeline_launch\.py'
+  'keyboard_action'
 )
 
 DRIVER_PATS=(
   'dual_revo3_system\.launch'
   'revo3_system\.launch'
   'ros2_control_node'
-  'activate_revo3_controllers'
   '/opt/ros/.*/lib/controller_manager/spawner .*revo3_'
   'robot_state_publisher --ros-args -r __ns:=/revo3_'
 )
 
-# Wrapper scripts only when user invokes stop directly (not from start_*)
+# Wrapper scripts only when user invokes stop directly (not from start_*).
+# Do not kill activate_revo3_controllers during internal clean: teleop.sh
+# waits on that helper while start_driver.sh is still bringing hands up.
 if [[ "${REVO3_STOP_INTERNAL:-0}" != "1" ]]; then
-  TELEOP_PATS+=('teleop_revo3\.sh' 'teleop\.sh')
-  DRIVER_PATS+=('start_revo3_driver\.sh' 'start_driver\.sh')
+  TELEOP_PATS+=('teleop_revo3\.sh' 'teleop\.sh' 'activate_revo3_controllers')
+  DRIVER_PATS+=('start_revo3_driver\.sh' 'start_driver\.sh' 'activate_revo3_controllers')
 fi
 
 case "${TARGET}" in
@@ -71,7 +73,7 @@ esac
 
 sleep 0.2
 echo "[stop_revo3] Remaining related processes:"
-if ps -eo pid,cmd | grep -E 'ros2_control_node|teleop_revo3|manus_data_publisher|retarget_node|dual_revo3|revo3_system\.launch' | grep -v grep; then
+if ps -eo pid,cmd | grep -E 'ros2_control_node|teleop_revo3|manus_data_publisher|retarget_node|keyboard_action|dual_revo3|revo3_system\.launch' | grep -v grep; then
   echo "[stop_revo3] WARN: some processes still alive; try again or kill by PID." >&2
 else
   echo "  (none)"

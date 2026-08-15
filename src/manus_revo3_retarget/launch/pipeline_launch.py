@@ -97,11 +97,18 @@ def _create_runtime_nodes(context, *args, **kwargs):
     left_calibration_config = LaunchConfiguration("left_calibration_config").perform(context)
     right_calibration_config = LaunchConfiguration("right_calibration_config").perform(context)
 
+    enable_keyboard_actions = LaunchConfiguration("enable_keyboard_actions").perform(context).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     overrides = {
         "use_revo3_namespace": use_revo3_namespace,
         "command_topic_suffix": command_topic_suffix,
         "retarget_target_topic_suffix": retarget_target_topic_suffix,
         "mit_command_publish_hz": mit_command_publish_hz,
+        "enable_keyboard_actions": enable_keyboard_actions,
     }
 
     parameter_dicts = [
@@ -110,6 +117,9 @@ def _create_runtime_nodes(context, *args, **kwargs):
         _load_ros_parameters(LaunchConfiguration("four_finger_retarget_config").perform(context)),
         _load_ros_parameters(LaunchConfiguration("spread_retarget_config").perform(context)),
     ]
+    keyboard_actions_config = LaunchConfiguration("keyboard_actions_config").perform(context)
+    if enable_keyboard_actions and keyboard_actions_config.strip():
+        parameter_dicts.append(_load_ros_parameters(keyboard_actions_config))
     if retarget_config:
         parameter_dicts.append(_load_ros_parameters(retarget_config))
     common_parameter_dicts = list(parameter_dicts)
@@ -227,6 +237,16 @@ def generate_launch_description():
             "spread_retarget_config",
             default_value=PathJoinSubstitution([package_share, "config", "spread_retarget.yaml"]),
             description="Spread/MPR retarget parameter YAML.",
+        ),
+        DeclareLaunchArgument(
+            "enable_keyboard_actions",
+            default_value="false",
+            description="Subscribe to keyboard pose commands. Off by default to keep teleop latency low.",
+        ),
+        DeclareLaunchArgument(
+            "keyboard_actions_config",
+            default_value=PathJoinSubstitution([package_share, "config", "keyboard_actions.yaml"]),
+            description="Named keyboard pose commands and interpolation duration. Loaded only when enable_keyboard_actions is true.",
         ),
         DeclareLaunchArgument(
             "retarget_config",

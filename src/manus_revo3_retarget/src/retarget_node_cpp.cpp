@@ -1,5 +1,6 @@
 #include <array>
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
@@ -15,8 +16,11 @@
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "ament_index_cpp/get_package_prefix.hpp"
 #include "manus_ros2_msgs/msg/manus_glove.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
+#include "rclcpp/executors/multi_threaded_executor.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "revo3_mit_controller_msgs/msg/revo3_mit_command.hpp"
+#include "std_msgs/msg/string.hpp"
 
 #include <dlfcn.h>
 
@@ -136,9 +140,17 @@ struct SideState
   rclcpp::Time last_target_time;
   bool has_segment{false};
   bool has_last_target{false};
+  bool action_override{false};
+  bool resume_smooth{false};
+  std::string active_action;
   FourFingerRetarget four_finger;
   SpreadRetarget spread;
   std::unique_ptr<ThumbPlugin> thumb;
+  std::vector<double> output_scale;
+  std::vector<double> output_offset;
+  std::vector<double> kp;
+  std::vector<double> kd;
+  std::vector<double> filtered_position;
 };
 
 class RetargetNodeCpp : public rclcpp::Node
@@ -152,9 +164,16 @@ public:
     command_topic_suffix_ = string_param("command_topic_suffix", "joint_forward_mit_controller/commands");
     target_topic_suffix_ = string_param("retarget_target_topic_suffix", "joint_forward_mit_controller/retarget_targets");
     mit_command_publish_hz_ = double_param("mit_command_publish_hz", 200.0);
-    mit_velocity_feedforward_enabled_ = bool_param("mit_velocity_feedforward_enabled", true);
+    mit_velocity_feedforward_enabled_ = bool_param("mit_velocity_feedforward_enabled", false);
+    mit_velocity_feedforward_scale_ = double_param("mit_velocity_feedforward_scale", 0.0);
+    mit_interpolation_horizon_s_ = double_param("mit_interpolation_horizon_s", 0.008);
+    command_ema_alpha_ = double_param("command_ema_alpha", 0.55);
+    command_max_delta_rad_ = deg_to_rad(double_param("command_max_delta_deg", 12.0));
     mit_default_kp_ = double_param("mit_default_kp", 0.4);
     mit_default_kd_ = double_param("mit_default_kd", 0.05);
+    enable_keyboard_actions_ = bool_param("enable_keyboard_actions", false);
+    action_command_topic_ = string_param("action_command_topic", "/manus_revo3_retarget/action_command");
+    action_interpolation_duration_s_ = double_param("action_interpolation_duration_s", 0.6);
 
     if (hand_mode_ != "left" && hand_mode_ != "right" && hand_mode_ != "both") {
       throw std::runtime_error("hand_mode must be left, right, or both");
@@ -167,18 +186,43 @@ public:
       right_ = create_side("right");
     }
 
+    glove_cb_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    timer_cb_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    rclcpp::SubscriptionOptions glove_opt;
+    glove_opt.callback_group = glove_cb_group_;
+
     sub_0_ = create_subscription<ManusGlove>(
-      "/manus_glove_0", 10, [this](ManusGlove::SharedPtr msg) { on_glove(*msg); });
+      "/manus_glove_0", 10, [this](ManusGlove::SharedPtr msg) { on_glove(*msg); }, glove_opt);
     sub_1_ = create_subscription<ManusGlove>(
-      "/manus_glove_1", 10, [this](ManusGlove::SharedPtr msg) { on_glove(*msg); });
+      "/manus_glove_1", 10, [this](ManusGlove::SharedPtr msg) { on_glove(*msg); }, glove_opt);
+    if (enable_keyboard_actions_) {
+      action_sub_ = create_subscription<std_msgs::msg::String>(
+        action_command_topic_, 10,
+        [this](std_msgs::msg::String::SharedPtr msg) { on_action_command(msg->data); },
+        glove_opt);
+    }
 
     const double period_s = 1.0 / std::max(1.0, mit_command_publish_hz_);
     timer_ = create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(period_s)),
-      [this]() { publish_latest(); });
+      [this]() { publish_latest(); },
+      timer_cb_group_);
 
-    RCLCPP_INFO(get_logger(), "C++ retarget node ready hand_mode=%s command_hz=%.1f", hand_mode_.c_str(),
-      mit_command_publish_hz_);
+    param_cb_handle_ = add_on_set_parameters_callback(
+      [this](const std::vector<rclcpp::Parameter> &) {
+        cache_dirty_.store(true);
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        return result;
+      });
+    cache_dirty_.store(true);
+    refresh_cached_params();
+
+    RCLCPP_INFO(
+      get_logger(),
+      "C++ retarget node ready hand_mode=%s command_hz=%.1f horizon=%.3fs ema=%.2f keyboard_actions=%s",
+      hand_mode_.c_str(), mit_command_publish_hz_, mit_interpolation_horizon_s_, command_ema_alpha_,
+      enable_keyboard_actions_ ? "on" : "off");
   }
 
 private:
@@ -286,9 +330,13 @@ private:
       return;
     }
 
-    state->four_finger.set_config(load_four_finger_config(state->side));
-    state->spread.set_config(load_spread_config(state->side));
-    state->thumb->set_config(load_thumb_config(state->side));
+    refresh_cached_params();
+    if (enable_keyboard_actions_) {
+      std::lock_guard<std::mutex> lock(state->mutex);
+      if (state->action_override) {
+        return;
+      }
+    }
 
     Ergonomics ergonomics;
     ergonomics.reserve(msg.ergonomics.size());
@@ -311,22 +359,18 @@ private:
     q.fill(0.0);
     state->four_finger.apply(ergonomics, q);
     state->spread.apply(ergonomics, q);
-    state->thumb->set_config(load_thumb_config(state->side));
     state->thumb->apply(ergonomics, keypoints, q);
 
     Revo3MITCommand out;
     out.header.stamp = now();
     out.joint_names = state->names;
     out.position.assign(q.begin(), q.end());
-    apply_output_calibration(state->side, state->names, out.position);
+    apply_output_calibration(*state, out.position);
+    filter_command(*state, out.position);
     out.velocity.assign(state->names.size(), 0.0);
     out.effort.assign(state->names.size(), 0.0);
-    mit_velocity_feedforward_enabled_ = bool_param(
-      "mit_velocity_feedforward_enabled", mit_velocity_feedforward_enabled_);
-    mit_default_kp_ = double_param("mit_default_kp", mit_default_kp_);
-    mit_default_kd_ = double_param("mit_default_kd", mit_default_kd_);
-    out.kp = mit_gains_for_joints(state->names, "kp", mit_default_kp_);
-    out.kd = mit_gains_for_joints(state->names, "kd", mit_default_kd_);
+    out.kp = state->kp;
+    out.kd = state->kd;
 
     update_interpolation_target(state, out);
     {
@@ -362,30 +406,33 @@ private:
 
   void update_interpolation_target(
     const std::shared_ptr<SideState> & state,
-    Revo3MITCommand & target)
+    Revo3MITCommand & target,
+    std::optional<double> duration_override = std::nullopt)
   {
     const rclcpp::Time target_time(target.header.stamp);
     std::lock_guard<std::mutex> lock(state->mutex);
 
     const std::vector<double> current_position = sample_position_locked(*state, target_time);
-    const std::vector<double> previous_target = state->target_position;
     const bool compatible =
       state->has_segment &&
       state->latest_target &&
       state->latest_target->joint_names == target.joint_names &&
-      previous_target.size() == target.position.size();
+      state->target_position.size() == target.position.size();
 
-    double duration_s = default_interpolation_duration_s();
+    double duration_s = mit_interpolation_horizon_s_ > 0.0 ?
+      mit_interpolation_horizon_s_ : default_interpolation_duration_s();
     std::vector<double> target_velocity(target.position.size(), 0.0);
-    if (state->has_last_target) {
-      const double interval_s = (target_time - state->last_target_time).seconds();
-      if (std::isfinite(interval_s) && interval_s > min_duration_s()) {
-        duration_s = interval_s;
-        if (compatible) {
-          for (std::size_t i = 0; i < target.position.size(); ++i) {
-            target_velocity[i] = (target.position[i] - previous_target[i]) / interval_s;
-          }
-        }
+    const bool use_action_duration =
+      duration_override.has_value() || state->resume_smooth;
+    if (use_action_duration) {
+      duration_s = duration_override.value_or(action_interpolation_duration_s_);
+      state->resume_smooth = false;
+    }
+    if (compatible && velocity_feedforward_enabled()) {
+      const double scale = std::max(0.0, mit_velocity_feedforward_scale_);
+      const double denom = std::max(duration_s, min_duration_s());
+      for (std::size_t i = 0; i < target.position.size(); ++i) {
+        target_velocity[i] = scale * (target.position[i] - current_position[i]) / denom;
       }
     }
 
@@ -456,29 +503,210 @@ private:
     return 1.0 / 60.0;
   }
 
-  bool velocity_feedforward_enabled() const
+  void on_action_command(std::string data)
   {
-    bool enabled = mit_velocity_feedforward_enabled_;
-    if (has_parameter("mit_velocity_feedforward_enabled")) {
-      get_parameter("mit_velocity_feedforward_enabled", enabled);
+    data = trim_lower(std::move(data));
+    std::string side_filter;
+    std::string action = data;
+    const auto colon = data.find(':');
+    if (colon != std::string::npos) {
+      side_filter = data.substr(0, colon);
+      action = trim_lower(data.substr(colon + 1));
     }
-    return enabled;
+    if (action.empty()) {
+      return;
+    }
+    if (action == "glove" || action == "none" || action == "clear" || action == "resume") {
+      resume_glove(left_, side_filter);
+      resume_glove(right_, side_filter);
+      return;
+    }
+    if (!is_known_action(action)) {
+      RCLCPP_WARN(get_logger(), "Unknown keyboard action '%s'", action.c_str());
+      return;
+    }
+    apply_named_action(left_, side_filter, action);
+    apply_named_action(right_, side_filter, action);
   }
 
-  void apply_output_calibration(
-    const std::string & side,
-    const std::vector<std::string> & names,
-    std::vector<double> & positions)
+  void resume_glove(const std::shared_ptr<SideState> & state, const std::string & side_filter)
+  {
+    if (!side_matches(state, side_filter)) {
+      return;
+    }
+    bool was_override = false;
+    {
+      std::lock_guard<std::mutex> lock(state->mutex);
+      was_override = state->action_override;
+      state->action_override = false;
+      state->resume_smooth = true;
+      state->active_action.clear();
+    }
+    if (was_override) {
+      RCLCPP_INFO(get_logger(), "Resume glove teleop on %s", state->side.c_str());
+    }
+  }
+
+  void apply_named_action(
+    const std::shared_ptr<SideState> & state,
+    const std::string & side_filter,
+    const std::string & action)
+  {
+    if (!side_matches(state, side_filter)) {
+      return;
+    }
+    {
+      std::lock_guard<std::mutex> lock(state->mutex);
+      state->action_override = true;
+      state->active_action = action;
+    }
+
+    refresh_cached_params();
+    Revo3MITCommand out;
+    out.header.stamp = now();
+    out.joint_names = state->names;
+    out.position = pose_from_action(state->side, action);
+    out.velocity.assign(state->names.size(), 0.0);
+    out.effort.assign(state->names.size(), 0.0);
+    out.kp = state->kp;
+    out.kd = state->kd;
+
+    update_interpolation_target(state, out, action_interpolation_duration_s_);
+    state->target_pub->publish(out);
+    RCLCPP_INFO(get_logger(), "Apply keyboard action '%s' on %s", action.c_str(), state->side.c_str());
+  }
+
+  static bool side_matches(const std::shared_ptr<SideState> & state, const std::string & side_filter)
+  {
+    if (!state) {
+      return false;
+    }
+    return side_filter.empty() || side_filter == "both" || side_filter == state->side;
+  }
+
+  bool is_known_action(const std::string & action)
+  {
+    static const std::array<const char *, 5> kBuiltin = {"open", "fist", "pinch", "point", "ok"};
+    for (const char * name : kBuiltin) {
+      if (action == name) {
+        return true;
+      }
+    }
+    const auto listed = list_parameters({"action_" + action + "_"}, 32);
+    return !listed.names.empty();
+  }
+
+  std::vector<double> pose_from_action(const std::string & side, const std::string & action)
   {
     const std::string prefix = side + "_";
-    for (std::size_t i = 0; i < names.size() && i < positions.size(); ++i) {
-      std::string suffix = names[i];
+    std::vector<double> positions;
+    positions.reserve(kJointCount);
+    for (const auto & name : joint_names(side)) {
+      std::string suffix = name;
       if (suffix.rfind(prefix, 0) == 0) {
         suffix = suffix.substr(prefix.size());
       }
-      const double scale = double_param("physical_" + side + "_" + suffix + "_scale", 1.0);
-      const double offset = deg_to_rad(double_param("physical_" + side + "_" + suffix + "_offset_deg", 0.0));
-      positions[i] = positions[i] * scale + offset;
+      positions.push_back(deg_to_rad(action_joint_deg(action, side, suffix)));
+    }
+    return positions;
+  }
+
+  double action_joint_deg(const std::string & action, const std::string & side, const std::string & suffix)
+  {
+    const std::string specific = "action_" + action + "_" + side + "_" + suffix + "_deg";
+    if (has_parameter(specific)) {
+      double value = 0.0;
+      get_parameter(specific, value);
+      if (std::isfinite(value)) {
+        return value;
+      }
+    }
+    return double_param("action_" + action + "_" + suffix + "_deg", 0.0);
+  }
+
+  static std::string trim_lower(std::string value)
+  {
+    const auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), not_space));
+    value.erase(std::find_if(value.rbegin(), value.rend(), not_space).base(), value.end());
+    for (auto & ch : value) {
+      ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return value;
+  }
+
+  bool velocity_feedforward_enabled() const
+  {
+    return mit_velocity_feedforward_enabled_ && mit_velocity_feedforward_scale_ > 0.0;
+  }
+
+  void refresh_cached_params()
+  {
+    if (!cache_dirty_.exchange(false)) {
+      return;
+    }
+    mit_velocity_feedforward_enabled_ = bool_param(
+      "mit_velocity_feedforward_enabled", mit_velocity_feedforward_enabled_);
+    mit_velocity_feedforward_scale_ = double_param(
+      "mit_velocity_feedforward_scale", mit_velocity_feedforward_scale_);
+    mit_interpolation_horizon_s_ = double_param(
+      "mit_interpolation_horizon_s", mit_interpolation_horizon_s_);
+    command_ema_alpha_ = std::clamp(double_param("command_ema_alpha", command_ema_alpha_), 0.0, 1.0);
+    command_max_delta_rad_ = deg_to_rad(double_param("command_max_delta_deg", 12.0));
+    mit_default_kp_ = double_param("mit_default_kp", mit_default_kp_);
+    mit_default_kd_ = double_param("mit_default_kd", mit_default_kd_);
+    action_interpolation_duration_s_ = std::max(
+      double_param("action_interpolation_duration_s", action_interpolation_duration_s_), min_duration_s());
+    refresh_side_cache(left_);
+    refresh_side_cache(right_);
+  }
+
+  void refresh_side_cache(const std::shared_ptr<SideState> & state)
+  {
+    if (!state) {
+      return;
+    }
+    state->four_finger.set_config(load_four_finger_config(state->side));
+    state->spread.set_config(load_spread_config(state->side));
+    state->thumb->set_config(load_thumb_config(state->side));
+
+    const std::string prefix = state->side + "_";
+    state->output_scale.assign(state->names.size(), 1.0);
+    state->output_offset.assign(state->names.size(), 0.0);
+    for (std::size_t i = 0; i < state->names.size(); ++i) {
+      std::string suffix = state->names[i];
+      if (suffix.rfind(prefix, 0) == 0) {
+        suffix = suffix.substr(prefix.size());
+      }
+      state->output_scale[i] = double_param("physical_" + state->side + "_" + suffix + "_scale", 1.0);
+      state->output_offset[i] = deg_to_rad(
+        double_param("physical_" + state->side + "_" + suffix + "_offset_deg", 0.0));
+    }
+    state->kp = mit_gains_for_joints(state->names, "kp", mit_default_kp_);
+    state->kd = mit_gains_for_joints(state->names, "kd", mit_default_kd_);
+  }
+
+  static void apply_output_calibration(const SideState & state, std::vector<double> & positions)
+  {
+    for (std::size_t i = 0; i < positions.size() && i < state.output_scale.size(); ++i) {
+      positions[i] = positions[i] * state.output_scale[i] + state.output_offset[i];
+    }
+  }
+
+  void filter_command(SideState & state, std::vector<double> & position) const
+  {
+    if (state.filtered_position.size() != position.size()) {
+      state.filtered_position = position;
+      return;
+    }
+    const double alpha = std::clamp(command_ema_alpha_, 0.0, 1.0);
+    const double max_delta = std::max(0.0, command_max_delta_rad_);
+    for (std::size_t i = 0; i < position.size(); ++i) {
+      const double previous = state.filtered_position[i];
+      const double limited = previous + std::clamp(position[i] - previous, -max_delta, max_delta);
+      const double filtered = alpha * limited + (1.0 - alpha) * previous;
+      state.filtered_position[i] = filtered;
+      position[i] = filtered;
     }
   }
 
@@ -580,13 +808,25 @@ private:
   std::string command_topic_suffix_;
   std::string target_topic_suffix_;
   double mit_command_publish_hz_{200.0};
-  bool mit_velocity_feedforward_enabled_{true};
+  bool mit_velocity_feedforward_enabled_{false};
+  double mit_velocity_feedforward_scale_{0.0};
+  double mit_interpolation_horizon_s_{0.008};
+  double command_ema_alpha_{0.55};
+  double command_max_delta_rad_{deg_to_rad(12.0)};
   double mit_default_kp_{0.4};
   double mit_default_kd_{0.05};
+  bool enable_keyboard_actions_{false};
+  std::string action_command_topic_;
+  double action_interpolation_duration_s_{0.6};
+  std::atomic<bool> cache_dirty_{true};
   std::shared_ptr<SideState> left_;
   std::shared_ptr<SideState> right_;
+  rclcpp::CallbackGroup::SharedPtr glove_cb_group_;
+  rclcpp::CallbackGroup::SharedPtr timer_cb_group_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_handle_;
   rclcpp::Subscription<ManusGlove>::SharedPtr sub_0_;
   rclcpp::Subscription<ManusGlove>::SharedPtr sub_1_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr action_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
@@ -602,7 +842,9 @@ int main(int argc, char ** argv)
   options.start_parameter_services(true);
   options.start_parameter_event_publisher(false);
   auto node = std::make_shared<manus_revo3_retarget::RetargetNodeCpp>(options);
-  rclcpp::spin(node);
+  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 2);
+  executor.add_node(node);
+  executor.spin();
   rclcpp::shutdown();
   return 0;
 }

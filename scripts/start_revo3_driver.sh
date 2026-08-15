@@ -44,8 +44,15 @@ source "${SETUP}"
 set -u
 REVO3_PYTHON="$(revo3_resolve_python)"
 
-REVO3_LAUNCH_RSP="${REVO3_LAUNCH_RSP:-true}"
 REVO3_LAUNCH_RVIZ="${REVO3_LAUNCH_RVIZ:-false}"
+# Teleop does not consume TF. Keep RSP off unless RViz (or an explicit override) needs it.
+if [[ -z "${REVO3_LAUNCH_RSP:-}" ]]; then
+  if [[ "${REVO3_LAUNCH_RVIZ}" == "true" || "${REVO3_LAUNCH_RVIZ}" == "1" ]]; then
+    REVO3_LAUNCH_RSP="true"
+  else
+    REVO3_LAUNCH_RSP="false"
+  fi
+fi
 REVO3_UPDATE_RATE="${REVO3_UPDATE_RATE:-200}"
 # both start mode:
 #   sequential (default) — left SN, then right SN, then one MIT activate (most reliable)
@@ -264,6 +271,7 @@ if [[ "${MODE}" == "both" ]]; then
     "launch_rsp:=${REVO3_LAUNCH_RSP}"
     "launch_rviz:=${REVO3_LAUNCH_RVIZ}"
     "update_rate:=${REVO3_UPDATE_RATE}"
+    "spawn_aux_controllers:=${REVO3_SPAWN_AUX}"
   )
   if [[ -n "${REVO3_LEFT_PROTOCOL_CONFIG:-}" ]]; then
     launch_args+=("left_protocol_config_file:=${REVO3_LEFT_PROTOCOL_CONFIG}")

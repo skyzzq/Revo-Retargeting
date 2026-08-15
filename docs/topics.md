@@ -24,3 +24,11 @@ Retarget commands:
 /revo3_left/joint_forward_mit_controller/retarget_targets
 /revo3_right/joint_forward_mit_controller/retarget_targets
 ```
+
+Keyboard pose commands:
+
+```text
+/manus_revo3_retarget/action_command  std_msgs/msg/String
+```
+
+Payload examples: `open`, `fist`, `pinch`, `point`, `ok`, `glove`, `left:fist`, `right:open`.

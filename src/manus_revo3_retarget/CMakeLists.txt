@@ -111,6 +111,16 @@ install(PROGRAMS manus_revo3_retarget/retarget_tuning_panel.py
   RENAME retarget_tuning_panel
 )
 
+install(PROGRAMS manus_revo3_retarget/keyboard_action.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME keyboard_action
+)
+
+install(PROGRAMS manus_revo3_retarget/teleop_probe.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME teleop_probe
+)
+
 install(FILES package.xml README.md
   DESTINATION share/${PROJECT_NAME}
 )

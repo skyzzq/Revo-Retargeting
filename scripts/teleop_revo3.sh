@@ -26,8 +26,13 @@ START_MANUS_PUBLISHER="${START_MANUS_PUBLISHER:-1}"
 START_REVO3_DRIVER="${START_REVO3_DRIVER:-1}"
 # When driver is external (START_REVO3_DRIVER=0), wait/ensure MIT is active first.
 REVO3_WAIT_MIT="${REVO3_WAIT_MIT:-1}"
-REVO3_ACTIVATE_WAIT_SEC="${REVO3_ACTIVATE_WAIT_SEC:-20}"
-REVO3_ACTIVATE_TIMEOUT_SEC="${REVO3_ACTIVATE_TIMEOUT_SEC:-15}"
+REVO3_ACTIVATE_TIMEOUT_SEC="${REVO3_ACTIVATE_TIMEOUT_SEC:-45}"
+if [[ "${MODE}" == "both" ]]; then
+  # Sequential left-then-right driver bring-up needs a longer MIT wait.
+  REVO3_ACTIVATE_WAIT_SEC="${REVO3_ACTIVATE_WAIT_SEC:-180}"
+else
+  REVO3_ACTIVATE_WAIT_SEC="${REVO3_ACTIVATE_WAIT_SEC:-90}"
+fi
 ACTIVATE_PY="${SCRIPT_DIR}/activate_revo3_controllers.py"
 
 revo3_maybe_activate_conda
@@ -130,8 +135,12 @@ trap handle_signal INT TERM
 
 if [[ "${START_REVO3_DRIVER}" == "1" ]]; then
   start_managed "Revo3 driver" "${SCRIPT_DIR}/start_revo3_driver.sh" "${MODE}"
-elif [[ "${REVO3_WAIT_MIT}" == "1" ]]; then
-  echo "[teleop_revo3] Driver external — ensuring MIT controllers active (${MODE})..."
+fi
+
+# Wait for MIT before MANUS Core / retarget. Starting all three at once
+# contends CPU with controller_manager spawners and makes the first seconds stutter.
+if [[ "${REVO3_WAIT_MIT}" == "1" ]]; then
+  echo "[teleop_revo3] Waiting for MIT controllers (${MODE}) before teleop..."
   "${REVO3_PYTHON}" "${ACTIVATE_PY}" "${MODE}" \
     --wait-loaded "${REVO3_ACTIVATE_WAIT_SEC}" \
     --timeout "${REVO3_ACTIVATE_TIMEOUT_SEC}" \
@@ -147,4 +156,14 @@ start_managed "Revo3 retarget" ros2 launch manus_revo3_retarget pipeline_launch.
   launch_manus_publisher:=false \
   "$@"
 
-wait_for_any
+ENABLE_KEYBOARD_ACTIONS="${ENABLE_KEYBOARD_ACTIONS:-0}"
+if [[ "${ENABLE_KEYBOARD_ACTIONS}" == "1" && -t 0 ]]; then
+  echo "[teleop_revo3] Keyboard actions: 1=open 2=fist 3=pinch 4=point 5=ok 0=glove  h=help"
+  ros2 run manus_revo3_retarget keyboard_action --hand-mode "${MODE}"
+else
+  if [[ "${ENABLE_KEYBOARD_ACTIONS}" == "1" ]]; then
+    echo "[teleop_revo3] stdin is not a TTY; keyboard actions disabled. Run:"
+    echo "  ros2 run manus_revo3_retarget keyboard_action --hand-mode ${MODE}"
+  fi
+  wait_for_any
+fi

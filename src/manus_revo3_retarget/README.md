@@ -64,6 +64,16 @@ ros2 launch manus_revo3_retarget pipeline_launch.py \
   calibration_config:=/path/to/physical_joint_calibration.yaml
 ```
 
+## Keyboard Pose Commands
+
+Keyboard pose insertion is off by default. Enable it only when needed:
+
+```bash
+ENABLE_KEYBOARD_ACTIONS=1 ros2 launch manus_revo3_retarget pipeline_launch.py \
+  hand_mode:=both enable_keyboard_actions:=true
+ros2 run manus_revo3_retarget keyboard_action --hand-mode both
+```
+
 If the Revo3 system is not using `/revo3_<side>` namespaces, override the command
 topics directly or use `control_config`:
 

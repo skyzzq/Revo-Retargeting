@@ -7,14 +7,14 @@ manus_revo3_retarget:
     legacy_left_physical_pinky_angle_scale: 1.0
     legacy_left_physical_pinky_dip_pip_scale: 1.0
     legacy_left_physical_pinky_mcp_scale: 1.0
-    legacy_left_physical_all_finger_angle_scale: 1.3
+    legacy_left_physical_all_finger_angle_scale: 1.1
     legacy_right_physical_index_angle_scale: 1.0
     legacy_right_physical_four_finger_mcp_scale: 1.0
     legacy_right_physical_middle_ring_dip_scale: 1.0
     legacy_right_physical_pinky_angle_scale: 1.0
     legacy_right_physical_pinky_dip_pip_scale: 1.0
     legacy_right_physical_pinky_mcp_scale: 1.0
-    legacy_right_physical_all_finger_angle_scale: 1.3
+    legacy_right_physical_all_finger_angle_scale: 1.1
     # Fist compensation: PIP scale 1.3 + per-joint offsets.
     physical_left_little_MCP_joint_scale: 1.0
     physical_left_little_MCP_joint_offset_deg: 4.0
