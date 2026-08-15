@@ -10,9 +10,9 @@ manus_revo3_retarget:
     thumb_ik_step_size: 0.30
     thumb_ik_tolerance: 0.0005
     left_thumb_cmp_offset_deg_physical: 0.0
-    left_thumb_cmp_scale_physical: 1.0
+    left_thumb_cmp_scale_physical: 0.92
     right_thumb_cmp_offset_deg_physical: 0.0
-    right_thumb_cmp_scale_physical: 1.04
+    right_thumb_cmp_scale_physical: 0.96
     legacy_left_physical_thumb_joint_offset_deg: 0.0
     legacy_left_physical_thumb_cmr_offset_deg: 0.0
     legacy_left_physical_thumb_mcp_offset_deg: 0.0
@@ -43,9 +43,9 @@ manus_revo3_retarget:
     physical_left_thumb_PIP_joint_offset_deg: 0.0
     physical_left_thumb_DIP_joint_scale: 1.0
     physical_left_thumb_DIP_joint_offset_deg: 0.0
-    physical_left_thumb_CMP_joint_scale: 1.0
+    physical_left_thumb_CMP_joint_scale: 0.92
     physical_left_thumb_CMP_joint_offset_deg: 0.0
-    physical_left_thumb_CMR_joint_scale: 1.0
+    physical_left_thumb_CMR_joint_scale: 0.9
     physical_left_thumb_CMR_joint_offset_deg: 0.0
     physical_right_thumb_MCP_joint_scale: 1.0
     physical_right_thumb_MCP_joint_offset_deg: -4.0
@@ -53,7 +53,7 @@ manus_revo3_retarget:
     physical_right_thumb_PIP_joint_offset_deg: 10.0
     physical_right_thumb_DIP_joint_scale: 1.0
     physical_right_thumb_DIP_joint_offset_deg: 10.0
-    physical_right_thumb_CMP_joint_scale: 1.0
+    physical_right_thumb_CMP_joint_scale: 0.92
     physical_right_thumb_CMP_joint_offset_deg: 0.0
-    physical_right_thumb_CMR_joint_scale: 1.0
+    physical_right_thumb_CMR_joint_scale: 0.9
     physical_right_thumb_CMR_joint_offset_deg: 0.0

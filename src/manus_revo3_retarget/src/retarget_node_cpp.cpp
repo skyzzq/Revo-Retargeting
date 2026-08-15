@@ -151,6 +151,8 @@ struct SideState
   std::vector<double> kp;
   std::vector<double> kd;
   std::vector<double> filtered_position;
+  std::vector<std::size_t> hold_finger_bases;
+  bool pinch_softened{false};
 };
 
 class RetargetNodeCpp : public rclcpp::Node
@@ -169,11 +171,24 @@ public:
     mit_interpolation_horizon_s_ = double_param("mit_interpolation_horizon_s", 0.008);
     command_ema_alpha_ = double_param("command_ema_alpha", 0.55);
     command_max_delta_rad_ = deg_to_rad(double_param("command_max_delta_deg", 12.0));
+    pinch_soften_enabled_ = bool_param("pinch_soften_enabled", true);
+    pinch_index_mcp_enter_rad_ = deg_to_rad(double_param("pinch_index_mcp_enter_deg", 28.0));
+    pinch_index_mcp_exit_rad_ = deg_to_rad(double_param("pinch_index_mcp_exit_deg", 16.0));
+    pinch_thumb_mcp_enter_rad_ = deg_to_rad(double_param("pinch_thumb_mcp_enter_deg", 16.0));
+    pinch_thumb_mcp_exit_rad_ = deg_to_rad(double_param("pinch_thumb_mcp_exit_deg", 8.0));
+    pinch_command_ema_alpha_ = double_param("pinch_command_ema_alpha", 0.28);
+    pinch_command_max_delta_rad_ = deg_to_rad(double_param("pinch_command_max_delta_deg", 4.0));
+    pinch_interpolation_horizon_s_ = double_param("pinch_interpolation_horizon_s", 0.020);
     mit_default_kp_ = double_param("mit_default_kp", 0.4);
     mit_default_kd_ = double_param("mit_default_kd", 0.05);
     enable_keyboard_actions_ = bool_param("enable_keyboard_actions", false);
     action_command_topic_ = string_param("action_command_topic", "/manus_revo3_retarget/action_command");
     action_interpolation_duration_s_ = double_param("action_interpolation_duration_s", 0.6);
+    hold_unused_fingers_ = bool_param("hold_unused_fingers", true);
+    hold_mcp_rad_ = deg_to_rad(double_param("hold_finger_MCP_deg", 65.0));
+    hold_pip_rad_ = deg_to_rad(double_param("hold_finger_PIP_deg", 75.0));
+    hold_dip_rad_ = deg_to_rad(double_param("hold_finger_DIP_deg", 50.0));
+    hold_mpr_rad_ = deg_to_rad(double_param("hold_finger_MPR_deg", 0.0));
 
     if (hand_mode_ != "left" && hand_mode_ != "right" && hand_mode_ != "both") {
       throw std::runtime_error("hand_mode must be left, right, or both");
@@ -217,12 +232,15 @@ public:
       });
     cache_dirty_.store(true);
     refresh_cached_params();
+    seed_hold_targets(left_);
+    seed_hold_targets(right_);
 
     RCLCPP_INFO(
       get_logger(),
-      "C++ retarget node ready hand_mode=%s command_hz=%.1f horizon=%.3fs ema=%.2f keyboard_actions=%s",
+      "C++ retarget node ready hand_mode=%s command_hz=%.1f horizon=%.3fs ema=%.2f keyboard_actions=%s hold=%s",
       hand_mode_.c_str(), mit_command_publish_hz_, mit_interpolation_horizon_s_, command_ema_alpha_,
-      enable_keyboard_actions_ ? "on" : "off");
+      enable_keyboard_actions_ ? "on" : "off",
+      hold_unused_fingers_ ? "on" : "off");
   }
 
 private:
@@ -366,13 +384,19 @@ private:
     out.joint_names = state->names;
     out.position.assign(q.begin(), q.end());
     apply_output_calibration(*state, out.position);
+    apply_hold_fingers(*state, out.position);
+    const bool pinch = update_pinch_soften(*state, out.position);
     filter_command(*state, out.position);
     out.velocity.assign(state->names.size(), 0.0);
     out.effort.assign(state->names.size(), 0.0);
     out.kp = state->kp;
     out.kd = state->kd;
 
-    update_interpolation_target(state, out);
+    if (pinch) {
+      update_interpolation_target(state, out, std::max(pinch_interpolation_horizon_s_, min_duration_s()));
+    } else {
+      update_interpolation_target(state, out);
+    }
     {
       std::lock_guard<std::mutex> lock(state->mutex);
       if (state->latest_target) {
@@ -653,10 +677,23 @@ private:
       "mit_interpolation_horizon_s", mit_interpolation_horizon_s_);
     command_ema_alpha_ = std::clamp(double_param("command_ema_alpha", command_ema_alpha_), 0.0, 1.0);
     command_max_delta_rad_ = deg_to_rad(double_param("command_max_delta_deg", 12.0));
+    pinch_soften_enabled_ = bool_param("pinch_soften_enabled", pinch_soften_enabled_);
+    pinch_index_mcp_enter_rad_ = deg_to_rad(double_param("pinch_index_mcp_enter_deg", 28.0));
+    pinch_index_mcp_exit_rad_ = deg_to_rad(double_param("pinch_index_mcp_exit_deg", 16.0));
+    pinch_thumb_mcp_enter_rad_ = deg_to_rad(double_param("pinch_thumb_mcp_enter_deg", 16.0));
+    pinch_thumb_mcp_exit_rad_ = deg_to_rad(double_param("pinch_thumb_mcp_exit_deg", 8.0));
+    pinch_command_ema_alpha_ = std::clamp(double_param("pinch_command_ema_alpha", pinch_command_ema_alpha_), 0.0, 1.0);
+    pinch_command_max_delta_rad_ = deg_to_rad(double_param("pinch_command_max_delta_deg", 4.0));
+    pinch_interpolation_horizon_s_ = double_param("pinch_interpolation_horizon_s", pinch_interpolation_horizon_s_);
     mit_default_kp_ = double_param("mit_default_kp", mit_default_kp_);
     mit_default_kd_ = double_param("mit_default_kd", mit_default_kd_);
     action_interpolation_duration_s_ = std::max(
       double_param("action_interpolation_duration_s", action_interpolation_duration_s_), min_duration_s());
+    hold_unused_fingers_ = bool_param("hold_unused_fingers", hold_unused_fingers_);
+    hold_mcp_rad_ = deg_to_rad(double_param("hold_finger_MCP_deg", 65.0));
+    hold_pip_rad_ = deg_to_rad(double_param("hold_finger_PIP_deg", 75.0));
+    hold_dip_rad_ = deg_to_rad(double_param("hold_finger_DIP_deg", 50.0));
+    hold_mpr_rad_ = deg_to_rad(double_param("hold_finger_MPR_deg", 0.0));
     refresh_side_cache(left_);
     refresh_side_cache(right_);
   }
@@ -684,6 +721,96 @@ private:
     }
     state->kp = mit_gains_for_joints(state->names, "kp", mit_default_kp_);
     state->kd = mit_gains_for_joints(state->names, "kd", mit_default_kd_);
+    state->hold_finger_bases = hold_finger_bases_for_side(state->side);
+  }
+
+  std::vector<std::size_t> hold_finger_bases_for_side(const std::string & side)
+  {
+    std::vector<std::size_t> bases;
+    if (!hold_unused_fingers_) {
+      return bases;
+    }
+    const std::vector<std::string> fallback = {"little", "ring", "middle"};
+    for (auto name : string_array_param("hold_" + side + "_fingers", fallback)) {
+      name = trim_lower(std::move(name));
+      const auto base = finger_hold_base(name);
+      if (!base.has_value()) {
+        RCLCPP_WARN(get_logger(), "Unknown hold finger '%s' on %s", name.c_str(), side.c_str());
+        continue;
+      }
+      bases.push_back(*base);
+    }
+    return bases;
+  }
+
+  static std::optional<std::size_t> finger_hold_base(const std::string & name)
+  {
+    if (name == "little" || name == "pinky") {
+      return LittleMPR;
+    }
+    if (name == "ring") {
+      return RingMPR;
+    }
+    if (name == "middle") {
+      return MiddleMPR;
+    }
+    if (name == "index") {
+      return IndexMPR;
+    }
+    return std::nullopt;
+  }
+
+  void apply_hold_fingers(const SideState & state, std::vector<double> & position) const
+  {
+    for (const std::size_t base : state.hold_finger_bases) {
+      if (base + 3 >= position.size()) {
+        continue;
+      }
+      position[base + 0] = hold_mpr_rad_;
+      position[base + 1] = hold_mcp_rad_;
+      position[base + 2] = hold_pip_rad_;
+      position[base + 3] = hold_dip_rad_;
+    }
+  }
+
+  void seed_hold_targets(const std::shared_ptr<SideState> & state)
+  {
+    if (!state || state->hold_finger_bases.empty()) {
+      return;
+    }
+    Revo3MITCommand out;
+    out.header.stamp = now();
+    out.joint_names = state->names;
+    out.position.assign(state->names.size(), 0.0);
+    apply_hold_fingers(*state, out.position);
+    state->filtered_position = out.position;
+    out.velocity.assign(state->names.size(), 0.0);
+    out.effort.assign(state->names.size(), 0.0);
+    out.kp = state->kp;
+    out.kd = state->kd;
+    update_interpolation_target(state, out, action_interpolation_duration_s_);
+    state->target_pub->publish(out);
+
+    std::string held;
+    for (const std::size_t base : state->hold_finger_bases) {
+      if (!held.empty()) {
+        held += ",";
+      }
+      if (base == LittleMPR) {
+        held += "little";
+      } else if (base == RingMPR) {
+        held += "ring";
+      } else if (base == MiddleMPR) {
+        held += "middle";
+      } else if (base == IndexMPR) {
+        held += "index";
+      }
+    }
+    RCLCPP_INFO(
+      get_logger(),
+      "C++ %s hold unused fingers [%s] at MCP=%.0f PIP=%.0f DIP=%.0f deg",
+      state->side.c_str(), held.c_str(),
+      hold_mcp_rad_ * 180.0 / M_PI, hold_pip_rad_ * 180.0 / M_PI, hold_dip_rad_ * 180.0 / M_PI);
   }
 
   static void apply_output_calibration(const SideState & state, std::vector<double> & positions)
@@ -693,14 +820,43 @@ private:
     }
   }
 
+  bool update_pinch_soften(SideState & state, const std::vector<double> & position)
+  {
+    if (!pinch_soften_enabled_ || position.size() <= ThumbMCP) {
+      state.pinch_softened = false;
+      return false;
+    }
+    const double index_mcp = position[IndexMCP];
+    const double thumb_mcp = position[ThumbMCP];
+    const bool was = state.pinch_softened;
+    if (was) {
+      state.pinch_softened =
+        index_mcp > pinch_index_mcp_exit_rad_ && thumb_mcp > pinch_thumb_mcp_exit_rad_;
+    } else {
+      state.pinch_softened =
+        index_mcp > pinch_index_mcp_enter_rad_ && thumb_mcp > pinch_thumb_mcp_enter_rad_;
+    }
+    if (state.pinch_softened != was) {
+      RCLCPP_INFO(
+        get_logger(),
+        "%s pinch soften %s (index_MCP=%.1f thumb_MCP=%.1f deg)",
+        state.side.c_str(),
+        state.pinch_softened ? "on" : "off",
+        index_mcp * 180.0 / 3.141592653589793,
+        thumb_mcp * 180.0 / 3.141592653589793);
+    }
+    return state.pinch_softened;
+  }
+
   void filter_command(SideState & state, std::vector<double> & position) const
   {
     if (state.filtered_position.size() != position.size()) {
       state.filtered_position = position;
       return;
     }
-    const double alpha = std::clamp(command_ema_alpha_, 0.0, 1.0);
-    const double max_delta = std::max(0.0, command_max_delta_rad_);
+    const bool pinch = pinch_soften_enabled_ && state.pinch_softened;
+    const double alpha = std::clamp(pinch ? pinch_command_ema_alpha_ : command_ema_alpha_, 0.0, 1.0);
+    const double max_delta = std::max(0.0, pinch ? pinch_command_max_delta_rad_ : command_max_delta_rad_);
     for (std::size_t i = 0; i < position.size(); ++i) {
       const double previous = state.filtered_position[i];
       const double limited = previous + std::clamp(position[i] - previous, -max_delta, max_delta);
@@ -788,6 +944,41 @@ private:
     return value.empty() ? fallback : value;
   }
 
+  std::vector<std::string> string_array_param(
+    const std::string & name, const std::vector<std::string> & fallback)
+  {
+    if (!has_parameter(name)) {
+      declare_parameter<std::vector<std::string>>(name, fallback);
+    }
+    rclcpp::Parameter param;
+    if (!get_parameter(name, param)) {
+      return fallback;
+    }
+    if (param.get_type() == rclcpp::ParameterType::PARAMETER_STRING_ARRAY) {
+      return param.as_string_array();
+    }
+    if (param.get_type() == rclcpp::ParameterType::PARAMETER_STRING) {
+      std::vector<std::string> values;
+      std::string raw = param.as_string();
+      std::size_t start = 0;
+      while (start <= raw.size()) {
+        const std::size_t comma = raw.find(',', start);
+        const std::string part = comma == std::string::npos ?
+          raw.substr(start) : raw.substr(start, comma - start);
+        const std::string trimmed = trim_lower(part);
+        if (!trimmed.empty()) {
+          values.push_back(trimmed);
+        }
+        if (comma == std::string::npos) {
+          break;
+        }
+        start = comma + 1;
+      }
+      return values;
+    }
+    return fallback;
+  }
+
   std::string model_base_path()
   {
     const char * env_path = std::getenv("REVO3_MODEL_PATH");
@@ -813,11 +1004,24 @@ private:
   double mit_interpolation_horizon_s_{0.008};
   double command_ema_alpha_{0.55};
   double command_max_delta_rad_{deg_to_rad(12.0)};
+  bool pinch_soften_enabled_{true};
+  double pinch_index_mcp_enter_rad_{deg_to_rad(28.0)};
+  double pinch_index_mcp_exit_rad_{deg_to_rad(16.0)};
+  double pinch_thumb_mcp_enter_rad_{deg_to_rad(16.0)};
+  double pinch_thumb_mcp_exit_rad_{deg_to_rad(8.0)};
+  double pinch_command_ema_alpha_{0.28};
+  double pinch_command_max_delta_rad_{deg_to_rad(4.0)};
+  double pinch_interpolation_horizon_s_{0.020};
   double mit_default_kp_{0.4};
   double mit_default_kd_{0.05};
   bool enable_keyboard_actions_{false};
   std::string action_command_topic_;
   double action_interpolation_duration_s_{0.6};
+  bool hold_unused_fingers_{true};
+  double hold_mcp_rad_{deg_to_rad(65.0)};
+  double hold_pip_rad_{deg_to_rad(75.0)};
+  double hold_dip_rad_{deg_to_rad(50.0)};
+  double hold_mpr_rad_{0.0};
   std::atomic<bool> cache_dirty_{true};
   std::shared_ptr<SideState> left_;
   std::shared_ptr<SideState> right_;

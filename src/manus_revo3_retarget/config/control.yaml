@@ -13,7 +13,25 @@ manus_revo3_retarget:
     # 1.0 = raw target; lower = smoother, more lag.
     command_ema_alpha: 0.55
     command_max_delta_deg: 12.0
+    # After index+thumb close (pinch), slow the command so contact does not buzz.
+    pinch_soften_enabled: true
+    pinch_index_mcp_enter_deg: 28.0
+    pinch_index_mcp_exit_deg: 16.0
+    pinch_thumb_mcp_enter_deg: 16.0
+    pinch_thumb_mcp_exit_deg: 8.0
+    pinch_command_ema_alpha: 0.28
+    pinch_command_max_delta_deg: 4.0
+    pinch_interpolation_horizon_s: 0.020
     enable_keyboard_actions: false
+    # Hold unused fingers in a fist after startup; they do not follow the glove.
+    hold_unused_fingers: true
+    hold_left_fingers: [little, ring, middle]
+    hold_right_fingers: [little, ring, middle]
+    # URDF flexion upper limit is 1.4835 rad ≈ 85°. Hold 2° below that.
+    hold_finger_MCP_deg: 83.0
+    hold_finger_PIP_deg: 83.0
+    hold_finger_DIP_deg: 83.0
+    hold_finger_MPR_deg: 0.0
     # Grip strength: higher kp = stronger tracking / firmer grasp.
     mit_default_kp: 1.6
     mit_default_kd: 0.4
