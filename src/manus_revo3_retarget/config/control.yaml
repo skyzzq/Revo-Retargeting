@@ -15,25 +15,26 @@ manus_revo3_retarget:
     command_max_delta_deg: 12.0
     # Task overlays (config/profiles/{blocks,unbox}.yaml) override hold / pinch / kp.
     # Default launch task:=blocks matches these values. Use task:=unbox for full-hand grasp.
-    # Four states after index+thumb pinch gate (enter 28/16 deg, exit 16/8 deg):
-    # idle = air wave; close = pinch and flex >2 deg; hold = pinch and small motion;
-    # release = opening during/after pinch. Air-wave opening stays idle.
+    # Pinch hold damps contact tremor. Opening during/after pinch uses release EMA
+    # (not idle 0.55). Gate enter 28/16, exit 16/8 with 150 ms debounce
+    # (not 8 deg: index calibration offset is +8 deg, which deadlocked open).
+    # After a 2 deg open gap, thumb flexion is ratcheted (no extra shove).
     pinch_soften_enabled: true
     pinch_index_mcp_enter_deg: 28.0
     pinch_index_mcp_exit_deg: 16.0
     pinch_thumb_mcp_enter_deg: 16.0
     pinch_thumb_mcp_exit_deg: 8.0
+    pinch_gate_exit_hold_s: 0.15
+    pinch_release_open_deg: 2.0
     # Hold: freeze glove tremor vs the current command.
-    # Opening must exceed this deadband or hold tremor leaks into release.
     pinch_command_ema_alpha: 0.10
     pinch_command_max_delta_deg: 1.5
     pinch_command_deadband_deg: 1.0
     pinch_interpolation_horizon_s: 0.040
-    # Release: EMA is the main lag. Slew/horizon are light caps.
-    pinch_release_ema_alpha: 0.15
-    pinch_release_max_delta_deg: 2.0
-    pinch_release_interpolation_horizon_s: 0.040
-    pinch_release_blend_s: 0.25
+    pinch_release_ema_alpha: 0.2
+    pinch_release_max_delta_deg: 12.0
+    pinch_release_interpolation_horizon_s: 0.008
+    pinch_release_blend_s: 0.15
     enable_keyboard_actions: false
     # Hold unused fingers in a fist after startup; they do not follow the glove.
     hold_unused_fingers: true

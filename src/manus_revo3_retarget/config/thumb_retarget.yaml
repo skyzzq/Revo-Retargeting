@@ -23,8 +23,8 @@ manus_revo3_retarget:
     legacy_left_physical_thumb_dip_ik_scale: 1.0
     legacy_left_physical_thumb_reach_scale: 1.0
     legacy_left_physical_thumb_ik_position_scale: 1.0
-    legacy_left_physical_thumb_ema_prev: 0.5
-    legacy_left_physical_thumb_ema_cur: 0.5
+    legacy_left_physical_thumb_ema_prev: 0.3
+    legacy_left_physical_thumb_ema_cur: 0.7
     legacy_right_physical_thumb_joint_offset_deg: 0.0
     legacy_right_physical_thumb_cmr_offset_deg: 0.0
     legacy_right_physical_thumb_mcp_offset_deg: 0.0
@@ -35,8 +35,8 @@ manus_revo3_retarget:
     legacy_right_physical_thumb_dip_ik_scale: 1.0
     legacy_right_physical_thumb_reach_scale: 1.0
     legacy_right_physical_thumb_ik_position_scale: 1.0
-    legacy_right_physical_thumb_ema_prev: 0.5
-    legacy_right_physical_thumb_ema_cur: 0.5
+    legacy_right_physical_thumb_ema_prev: 0.3
+    legacy_right_physical_thumb_ema_cur: 0.7
     physical_left_thumb_MCP_joint_scale: 1.0
     physical_left_thumb_MCP_joint_offset_deg: 0.0
     physical_left_thumb_PIP_joint_scale: 1.0

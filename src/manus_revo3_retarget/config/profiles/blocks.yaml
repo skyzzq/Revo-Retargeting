@@ -7,13 +7,16 @@ manus_revo3_retarget:
     hold_left_fingers: [little, ring, middle]
     hold_right_fingers: [little, ring, middle]
     pinch_soften_enabled: true
+    pinch_index_mcp_exit_deg: 16.0
+    pinch_gate_exit_hold_s: 0.15
+    pinch_release_open_deg: 2.0
     pinch_command_ema_alpha: 0.10
     pinch_command_max_delta_deg: 1.5
     pinch_command_deadband_deg: 1.0
     pinch_interpolation_horizon_s: 0.040
-    pinch_release_ema_alpha: 0.15
-    pinch_release_max_delta_deg: 2.0
-    pinch_release_interpolation_horizon_s: 0.040
-    pinch_release_blend_s: 0.25
+    pinch_release_ema_alpha: 0.2
+    pinch_release_max_delta_deg: 12.0
+    pinch_release_interpolation_horizon_s: 0.008
+    pinch_release_blend_s: 0.15
     mit_default_kp: 1.6
     mit_default_kd: 0.4

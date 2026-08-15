@@ -154,10 +154,14 @@ struct SideState
   std::vector<std::size_t> hold_finger_bases;
   bool pinch_softened{false};
   bool release_active{false};
+  bool opening_latched{false};
   double pinch_release_weight{0.0};
+  double pinch_exit_hold_s{0.0};
   double command_horizon_s{0.0};
   std::chrono::steady_clock::time_point last_filter_tp{};
   bool has_filter_tp{false};
+  std::chrono::steady_clock::time_point last_pinch_tp{};
+  bool has_pinch_tp{false};
 };
 
 class RetargetNodeCpp : public rclcpp::Node
@@ -181,11 +185,13 @@ public:
     pinch_index_mcp_exit_rad_ = deg_to_rad(double_param("pinch_index_mcp_exit_deg", 16.0));
     pinch_thumb_mcp_enter_rad_ = deg_to_rad(double_param("pinch_thumb_mcp_enter_deg", 16.0));
     pinch_thumb_mcp_exit_rad_ = deg_to_rad(double_param("pinch_thumb_mcp_exit_deg", 8.0));
+    pinch_gate_exit_hold_s_ = double_param("pinch_gate_exit_hold_s", 0.15);
+    pinch_release_open_rad_ = deg_to_rad(double_param("pinch_release_open_deg", 2.0));
     pinch_command_ema_alpha_ = double_param("pinch_command_ema_alpha", 0.10);
     pinch_command_max_delta_rad_ = deg_to_rad(double_param("pinch_command_max_delta_deg", 1.5));
     pinch_command_deadband_rad_ = deg_to_rad(double_param("pinch_command_deadband_deg", 1.0));
     pinch_interpolation_horizon_s_ = double_param("pinch_interpolation_horizon_s", 0.040);
-    pinch_release_ema_alpha_ = double_param("pinch_release_ema_alpha", 0.15);
+    pinch_release_ema_alpha_ = double_param("pinch_release_ema_alpha", 0.2);
     pinch_release_max_delta_rad_ = deg_to_rad(double_param("pinch_release_max_delta_deg", 2.0));
     pinch_release_interpolation_horizon_s_ = double_param("pinch_release_interpolation_horizon_s", 0.040);
     pinch_release_blend_s_ = double_param("pinch_release_blend_s", 0.25);
@@ -690,6 +696,8 @@ private:
     pinch_index_mcp_exit_rad_ = deg_to_rad(double_param("pinch_index_mcp_exit_deg", 16.0));
     pinch_thumb_mcp_enter_rad_ = deg_to_rad(double_param("pinch_thumb_mcp_enter_deg", 16.0));
     pinch_thumb_mcp_exit_rad_ = deg_to_rad(double_param("pinch_thumb_mcp_exit_deg", 8.0));
+    pinch_gate_exit_hold_s_ = std::max(0.0, double_param("pinch_gate_exit_hold_s", pinch_gate_exit_hold_s_));
+    pinch_release_open_rad_ = deg_to_rad(double_param("pinch_release_open_deg", 2.0));
     pinch_command_ema_alpha_ = std::clamp(double_param("pinch_command_ema_alpha", pinch_command_ema_alpha_), 0.0, 1.0);
     pinch_command_max_delta_rad_ = deg_to_rad(double_param("pinch_command_max_delta_deg", 1.5));
     pinch_command_deadband_rad_ = deg_to_rad(double_param("pinch_command_deadband_deg", 1.0));
@@ -839,17 +847,31 @@ private:
   {
     if (!pinch_soften_enabled_ || position.size() <= ThumbMCP) {
       state.pinch_softened = false;
+      state.pinch_exit_hold_s = 0.0;
       return false;
     }
     const double index_mcp = position[IndexMCP];
     const double thumb_mcp = position[ThumbMCP];
     const bool was = state.pinch_softened;
-    if (was) {
-      state.pinch_softened =
-        index_mcp > pinch_index_mcp_exit_rad_ && thumb_mcp > pinch_thumb_mcp_exit_rad_;
+    const bool raw_on = was
+      ? (index_mcp > pinch_index_mcp_exit_rad_ && thumb_mcp > pinch_thumb_mcp_exit_rad_)
+      : (index_mcp > pinch_index_mcp_enter_rad_ && thumb_mcp > pinch_thumb_mcp_enter_rad_);
+
+    const auto now_tp = std::chrono::steady_clock::now();
+    double dt = 1.0 / 120.0;
+    if (state.has_pinch_tp) {
+      dt = std::clamp(
+        std::chrono::duration<double>(now_tp - state.last_pinch_tp).count(), 0.001, 0.05);
+    }
+    state.last_pinch_tp = now_tp;
+    state.has_pinch_tp = true;
+
+    if (was && !raw_on) {
+      state.pinch_exit_hold_s += dt;
+      state.pinch_softened = state.pinch_exit_hold_s < std::max(0.0, pinch_gate_exit_hold_s_);
     } else {
-      state.pinch_softened =
-        index_mcp > pinch_index_mcp_enter_rad_ && thumb_mcp > pinch_thumb_mcp_enter_rad_;
+      state.pinch_exit_hold_s = 0.0;
+      state.pinch_softened = raw_on;
     }
     if (state.pinch_softened != was) {
       RCLCPP_INFO(
@@ -869,9 +891,9 @@ private:
       index == ThumbMCP || index == ThumbPIP || index == ThumbDIP || index == ThumbCMP;
   }
 
-  static double lerp(double a, double b, double t)
+  static bool is_thumb_flexion_joint(std::size_t index)
   {
-    return a + std::clamp(t, 0.0, 1.0) * (b - a);
+    return index == ThumbMCP || index == ThumbPIP || index == ThumbDIP || index == ThumbCMP;
   }
 
   void filter_command(SideState & state, std::vector<double> & position) const
@@ -892,38 +914,49 @@ private:
     state.has_filter_tp = true;
 
     const bool pinch = pinch_soften_enabled_ && state.pinch_softened;
-    const double open_eps = std::max(pinch_command_deadband_rad_, deg_to_rad(1.0));
-    const double catchup_eps = open_eps;
+    const double latch_gap = std::max(pinch_release_open_rad_, pinch_command_deadband_rad_);
     const double deadband = pinch ? std::max(0.0, pinch_command_deadband_rad_) : 0.0;
-    const double close_eps = std::max(deadband, deg_to_rad(2.0));
 
     bool pinch_finger_opening = false;
-    bool pinch_finger_closing = false;
+    bool pinch_finger_reclosing = false;
     bool pinch_finger_lagging = false;
-    if (pinch_soften_enabled_ && (pinch || state.release_active)) {
+    if (pinch_soften_enabled_ && (pinch || state.release_active || state.opening_latched) &&
+      position.size() > ThumbMCP && state.filtered_position.size() > ThumbMCP)
+    {
+      const double index_gap = state.filtered_position[IndexMCP] - position[IndexMCP];
+      const double thumb_gap = state.filtered_position[ThumbMCP] - position[ThumbMCP];
+      if (index_gap > latch_gap || thumb_gap > latch_gap) {
+        pinch_finger_opening = true;
+      }
+      if (-index_gap > latch_gap) {
+        pinch_finger_reclosing = true;
+      }
       for (std::size_t i = 0; i < position.size(); ++i) {
-        if (!is_pinch_flexion_joint(i)) {
-          continue;
-        }
-        const double delta = position[i] - state.filtered_position[i];
-        if (delta < -open_eps) {
-          pinch_finger_opening = true;
-        }
-        if (delta > close_eps) {
-          pinch_finger_closing = true;
-        }
-        if (delta < -catchup_eps) {
+        if (is_pinch_flexion_joint(i) &&
+          (state.filtered_position[i] - position[i]) > latch_gap)
+        {
           pinch_finger_lagging = true;
         }
       }
     }
 
-    if (pinch) {
+    if (pinch && pinch_finger_opening) {
+      state.opening_latched = true;
+    } else if (pinch && state.opening_latched && pinch_finger_reclosing) {
+      state.opening_latched = false;
+    }
+
+    if (pinch && state.opening_latched) {
       state.release_active = true;
       state.pinch_release_weight = 1.0;
-    } else if (state.release_active && pinch_finger_lagging) {
+    } else if (pinch) {
+      state.release_active = false;
+      state.pinch_release_weight = 0.0;
+    } else if (state.opening_latched && pinch_finger_lagging) {
+      state.release_active = true;
       state.pinch_release_weight = 1.0;
     } else if (state.pinch_release_weight > 0.0) {
+      state.opening_latched = false;
       state.pinch_release_weight = std::max(
         0.0, state.pinch_release_weight - dt / std::max(pinch_release_blend_s_, 1e-3));
       if (state.pinch_release_weight <= 0.0) {
@@ -931,47 +964,37 @@ private:
       }
     } else {
       state.release_active = false;
+      state.opening_latched = false;
     }
 
-    const bool allow_slow_open = pinch || state.release_active;
-    if (pinch_finger_opening && allow_slow_open) {
-      state.command_horizon_s = pinch_release_interpolation_horizon_s_;
-    } else if (pinch && !pinch_finger_closing) {
+    if (pinch && !state.opening_latched) {
       state.command_horizon_s = pinch_interpolation_horizon_s_;
-    } else if (!pinch && state.release_active && state.pinch_release_weight > 0.0) {
-      state.command_horizon_s = lerp(
-        mit_interpolation_horizon_s_,
-        pinch_release_interpolation_horizon_s_,
-        state.pinch_release_weight);
     } else {
       state.command_horizon_s = mit_interpolation_horizon_s_;
     }
 
+    const bool ratchet_thumb = state.opening_latched || state.release_active;
     for (std::size_t i = 0; i < position.size(); ++i) {
       const double previous = state.filtered_position[i];
       double desired = position[i];
-      const double delta = desired - previous;
       const bool pinch_joint = is_pinch_flexion_joint(i);
-      const bool opening = pinch_joint && delta < -open_eps;
-      const bool closing = pinch_joint && delta > close_eps;
+      if (ratchet_thumb && is_thumb_flexion_joint(i) && desired > previous) {
+        desired = previous;
+      }
+      const double delta = desired - previous;
+      const bool opening = pinch_joint && delta < 0.0;
 
       double alpha = command_ema_alpha_;
       double max_delta = command_max_delta_rad_;
       bool apply_deadband = false;
-      if (opening && allow_slow_open) {
+      const bool allow_release = pinch || state.release_active || state.opening_latched;
+      if (opening && allow_release) {
         alpha = pinch_release_ema_alpha_;
         max_delta = pinch_release_max_delta_rad_;
-      } else if (pinch && closing) {
-        alpha = command_ema_alpha_;
-        max_delta = command_max_delta_rad_;
       } else if (pinch) {
         alpha = pinch_command_ema_alpha_;
         max_delta = pinch_command_max_delta_rad_;
         apply_deadband = deadband > 0.0;
-      } else if (allow_slow_open && pinch_joint && state.pinch_release_weight > 0.0) {
-        alpha = lerp(command_ema_alpha_, pinch_release_ema_alpha_, state.pinch_release_weight);
-        max_delta = lerp(
-          command_max_delta_rad_, pinch_release_max_delta_rad_, state.pinch_release_weight);
       }
 
       if (apply_deadband && std::abs(desired - previous) < deadband) {
@@ -1129,6 +1152,8 @@ private:
   double pinch_index_mcp_exit_rad_{deg_to_rad(16.0)};
   double pinch_thumb_mcp_enter_rad_{deg_to_rad(16.0)};
   double pinch_thumb_mcp_exit_rad_{deg_to_rad(8.0)};
+  double pinch_gate_exit_hold_s_{0.15};
+  double pinch_release_open_rad_{deg_to_rad(2.0)};
   double pinch_command_ema_alpha_{0.10};
   double pinch_command_max_delta_rad_{deg_to_rad(1.5)};
   double pinch_command_deadband_rad_{deg_to_rad(1.0)};
