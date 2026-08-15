@@ -4,6 +4,34 @@
 
 REVO3_CONDA_ENV="${REVO3_CONDA_ENV:-revo_retargeting}"
 
+revo3_normalize_task() {
+  case "${1:-}" in
+    blocks|block) printf '%s\n' "blocks" ;;
+    unbox|unboxing|express) printf '%s\n' "unbox" ;;
+    *) return 1 ;;
+  esac
+}
+
+revo3_unbox_profile_dir() {
+  local workspace="$1"
+  local share candidate
+  if command -v ros2 >/dev/null 2>&1; then
+    share="$(ros2 pkg prefix manus_revo3_retarget 2>/dev/null || true)"
+    candidate="${share}/share/manus_revo3_retarget/config/profiles/unbox"
+    if [[ -n "${share}" && -d "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  fi
+  candidate="${workspace}/src/manus_revo3_retarget/config/profiles/unbox"
+  if [[ -d "${candidate}" ]]; then
+    printf '%s\n' "${candidate}"
+    return 0
+  fi
+  echo "[revo3] ERROR: unbox profile directory not found. Rebuild manus_revo3_retarget." >&2
+  return 1
+}
+
 revo3_source_nounset() {
   set +u
   # shellcheck source=/dev/null

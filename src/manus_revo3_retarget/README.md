@@ -32,7 +32,10 @@ source install/setup.bash
 ```bash
 source install/setup.bash
 ros2 launch manus_revo3_retarget pipeline_launch.py hand_mode:=both
+ros2 launch manus_revo3_retarget pipeline_launch.py hand_mode:=both task:=unbox
 ```
+
+`task:=blocks`（默认）锁闲指、较低刚度；`task:=unbox` 五指遥操、更大抓握力。Overlay 在 `config/profiles/`。
 
 `hand_mode:=both` starts two independent retarget processes:
 `manus_revo3_retarget_left` and `manus_revo3_retarget_right`. Each process only

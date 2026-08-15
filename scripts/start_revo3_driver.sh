@@ -10,16 +10,6 @@
 # - Manual MIT commands need --rate (not --once); command_timeout_sec≈0.25s.
 set -euo pipefail
 
-MODE="${1:-right}"
-if [[ $# -gt 0 ]]; then
-  shift
-fi
-
-if [[ "${MODE}" != "left" && "${MODE}" != "right" && "${MODE}" != "both" ]]; then
-  echo "Usage: start_revo3_driver.sh [left|right|both] [extra ros2 launch args...]" >&2
-  exit 1
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SETUP="${WORKSPACE}/install/setup.bash"
@@ -27,6 +17,39 @@ ACTIVATE_PY="${SCRIPT_DIR}/activate_revo3_controllers.py"
 STOP_SH="${SCRIPT_DIR}/stop_revo3.sh"
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/revo3_common.sh"
+
+MODE=""
+TASK="${TELEOP_TASK:-blocks}"
+EXTRA=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    left|right|both)
+      MODE="$1"
+      shift
+      ;;
+    blocks|block|unbox|unboxing|express)
+      TASK="$1"
+      shift
+      ;;
+    *)
+      EXTRA+=("$@")
+      break
+      ;;
+  esac
+done
+MODE="${MODE:-both}"
+set -- "${EXTRA[@]}"
+
+if [[ "${MODE}" != "left" && "${MODE}" != "right" && "${MODE}" != "both" ]]; then
+  echo "Usage: start_revo3_driver.sh [left|right|both] [blocks|unbox] [extra ros2 launch args...]" >&2
+  exit 1
+fi
+if ! TASK="$(revo3_normalize_task "${TASK}")"; then
+  echo "Usage: start_revo3_driver.sh [left|right|both] [blocks|unbox] [extra ros2 launch args...]" >&2
+  echo "Unknown task: ${TASK}" >&2
+  exit 1
+fi
+export TELEOP_TASK="${TASK}"
 
 if [[ ! -f "${SETUP}" ]]; then
   echo "[revo3_driver] Missing ${SETUP}. Run python -m colcon build --symlink-install first." >&2
@@ -43,6 +66,12 @@ fi
 source "${SETUP}"
 set -u
 REVO3_PYTHON="$(revo3_resolve_python)"
+echo "[revo3_driver] mode=${MODE} task=${TASK}"
+
+UNBOX_PROFILE_DIR=""
+if [[ "${TASK}" == "unbox" ]]; then
+  UNBOX_PROFILE_DIR="$(revo3_unbox_profile_dir "${WORKSPACE}")"
+fi
 
 REVO3_LAUNCH_RVIZ="${REVO3_LAUNCH_RVIZ:-false}"
 # Teleop does not consume TF. Keep RSP off unless RViz (or an explicit override) needs it.
@@ -197,6 +226,12 @@ launch_one_side() {
   elif [[ -n "${REVO3_PROTOCOL_CONFIG:-}" ]]; then
     launch_args+=("protocol_config_file:=${REVO3_PROTOCOL_CONFIG}")
   fi
+  if [[ -n "${UNBOX_PROFILE_DIR}" ]]; then
+    launch_args+=(
+      "controllers_file:=${UNBOX_PROFILE_DIR}/revo3_controllers.yaml"
+      "initial_positions_file:=${UNBOX_PROFILE_DIR}/initial_positions_${side}.yaml"
+    )
+  fi
   start_bg "${side} driver" "${logfile}" \
     ros2 launch revo3_driver revo3_system.launch.py "${launch_args[@]}" "$@"
 }
@@ -278,6 +313,13 @@ if [[ "${MODE}" == "both" ]]; then
   fi
   if [[ -n "${REVO3_RIGHT_PROTOCOL_CONFIG:-}" ]]; then
     launch_args+=("right_protocol_config_file:=${REVO3_RIGHT_PROTOCOL_CONFIG}")
+  fi
+  if [[ -n "${UNBOX_PROFILE_DIR}" ]]; then
+    launch_args+=(
+      "controllers_file:=${UNBOX_PROFILE_DIR}/revo3_controllers.yaml"
+      "left_initial_positions_file:=${UNBOX_PROFILE_DIR}/initial_positions_left.yaml"
+      "right_initial_positions_file:=${UNBOX_PROFILE_DIR}/initial_positions_right.yaml"
+    )
   fi
   start_bg "both driver" "${DUAL_LOG}" \
     ros2 launch revo3_driver dual_revo3_system.launch.py "${launch_args[@]}" "$@"

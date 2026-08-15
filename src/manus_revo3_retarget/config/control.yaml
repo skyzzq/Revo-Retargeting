@@ -13,6 +13,8 @@ manus_revo3_retarget:
     # 1.0 = raw target; lower = smoother, more lag.
     command_ema_alpha: 0.55
     command_max_delta_deg: 12.0
+    # Task overlays (config/profiles/{blocks,unbox}.yaml) override hold / pinch / kp.
+    # Default launch task:=blocks matches these values. Use task:=unbox for full-hand grasp.
     # After index+thumb close (pinch), slow the command so contact does not buzz.
     pinch_soften_enabled: true
     pinch_index_mcp_enter_deg: 28.0

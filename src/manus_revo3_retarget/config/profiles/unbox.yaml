@@ -1,0 +1,11 @@
+---
+# Task overlay: parcel unboxing. Loaded after control.yaml.
+# All fingers follow the glove; higher MIT gains for a firmer grasp.
+manus_revo3_retarget:
+  ros__parameters:
+    hold_unused_fingers: false
+    hold_left_fingers: []
+    hold_right_fingers: []
+    pinch_soften_enabled: false
+    mit_default_kp: 2.8
+    mit_default_kd: 0.6

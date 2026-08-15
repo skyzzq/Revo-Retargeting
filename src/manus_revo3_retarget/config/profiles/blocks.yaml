@@ -1,0 +1,10 @@
+---
+# Task overlay: block building. Loaded after control.yaml.
+manus_revo3_retarget:
+  ros__parameters:
+    hold_unused_fingers: true
+    hold_left_fingers: [little, ring, middle]
+    hold_right_fingers: [little, ring, middle]
+    pinch_soften_enabled: true
+    mit_default_kp: 1.6
+    mit_default_kd: 0.4

@@ -1,21 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:-right}"
-if [[ $# -gt 0 ]]; then
-  shift
-fi
-
-if [[ "${MODE}" != "left" && "${MODE}" != "right" && "${MODE}" != "both" ]]; then
-  echo "Usage: teleop_revo3.sh [left|right|both] [extra manus_revo3_retarget launch args...]" >&2
-  exit 1
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SETUP="${WORKSPACE}/install/setup.bash"
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/revo3_common.sh"
+
+MODE=""
+TASK="${TELEOP_TASK:-blocks}"
+EXTRA=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    left|right|both)
+      MODE="$1"
+      shift
+      ;;
+    blocks|block|unbox|unboxing|express)
+      TASK="$1"
+      shift
+      ;;
+    *)
+      EXTRA+=("$@")
+      break
+      ;;
+  esac
+done
+MODE="${MODE:-both}"
+set -- "${EXTRA[@]}"
+
+if [[ "${MODE}" != "left" && "${MODE}" != "right" && "${MODE}" != "both" ]]; then
+  echo "Usage: teleop_revo3.sh [left|right|both] [blocks|unbox] [extra manus_revo3_retarget launch args...]" >&2
+  exit 1
+fi
+if ! TASK="$(revo3_normalize_task "${TASK}")"; then
+  echo "Usage: teleop_revo3.sh [left|right|both] [blocks|unbox] [extra manus_revo3_retarget launch args...]" >&2
+  echo "Unknown task: ${TASK}" >&2
+  exit 1
+fi
+export TELEOP_TASK="${TASK}"
 
 if [[ ! -f "${SETUP}" ]]; then
   echo "[teleop_revo3] Missing ${SETUP}. Run python -m colcon build --symlink-install first." >&2
@@ -133,8 +156,9 @@ handle_signal() {
 trap cleanup EXIT
 trap handle_signal INT TERM
 
+echo "[teleop_revo3] mode=${MODE} task=${TASK}"
 if [[ "${START_REVO3_DRIVER}" == "1" ]]; then
-  start_managed "Revo3 driver" "${SCRIPT_DIR}/start_revo3_driver.sh" "${MODE}"
+  start_managed "Revo3 driver" "${SCRIPT_DIR}/start_revo3_driver.sh" "${MODE}" "${TASK}"
 fi
 
 # Wait for MIT before MANUS Core / retarget. Starting all three at once
@@ -153,6 +177,7 @@ fi
 
 start_managed "Revo3 retarget" ros2 launch manus_revo3_retarget pipeline_launch.py \
   hand_mode:="${MODE}" \
+  task:="${TASK}" \
   launch_manus_publisher:=false \
   "$@"
 
