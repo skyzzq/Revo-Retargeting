@@ -66,8 +66,20 @@ def _load_ros_parameters(path):
         merged.update(direct_params)
 
     if merged:
-        return merged
-    return dict(data)
+        return _sanitize_ros_parameters(merged)
+    return _sanitize_ros_parameters(dict(data))
+
+
+def _sanitize_ros_parameters(params):
+    """Drop empty sequences. Humble launch ParameterValue rejects () from YAML []."""
+    cleaned = {}
+    for key, value in params.items():
+        if isinstance(value, tuple):
+            value = list(value)
+        if isinstance(value, list) and not value:
+            continue
+        cleaned[key] = value
+    return cleaned
 
 
 def _create_runtime_nodes(context, *args, **kwargs):

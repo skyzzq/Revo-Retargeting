@@ -1,5 +1,6 @@
 # Unbox overlay for revo3_driver. Launch substitutes HAND_PREFIX / UPDATE_RATE.
-# Same as the driver template, but no unused-finger startup hold.
+# Startup pose is fully open (0 rad on all joints), unlike blocks which fists
+# unused fingers at 1.4486 rad.
 #
 # The hardware plugin exposes per-joint command interfaces:
 #   position (rad), velocity (rad/s), effort (mA torque-ff), kp, kd
@@ -70,8 +71,30 @@
     default_effort: 0.0
     command_timeout_sec: 0.25
     hold_position_on_timeout: true
-    # Omit startup_hold_joints: ROS 2 rejects an empty YAML list (`[]`) as
-    # "No parameter value set" and aborts ros2_control_node.
+    # Fully open until the first teleop MIT command (0 rad = URDF open).
+    startup_hold_position: 0.0
+    startup_hold_joints:
+      - HAND_PREFIX_little_MPR_joint
+      - HAND_PREFIX_little_MCP_joint
+      - HAND_PREFIX_little_PIP_joint
+      - HAND_PREFIX_little_DIP_joint
+      - HAND_PREFIX_ring_MPR_joint
+      - HAND_PREFIX_ring_MCP_joint
+      - HAND_PREFIX_ring_PIP_joint
+      - HAND_PREFIX_ring_DIP_joint
+      - HAND_PREFIX_middle_MPR_joint
+      - HAND_PREFIX_middle_MCP_joint
+      - HAND_PREFIX_middle_PIP_joint
+      - HAND_PREFIX_middle_DIP_joint
+      - HAND_PREFIX_index_MPR_joint
+      - HAND_PREFIX_index_MCP_joint
+      - HAND_PREFIX_index_PIP_joint
+      - HAND_PREFIX_index_DIP_joint
+      - HAND_PREFIX_thumb_MCP_joint
+      - HAND_PREFIX_thumb_PIP_joint
+      - HAND_PREFIX_thumb_DIP_joint
+      - HAND_PREFIX_thumb_CMP_joint
+      - HAND_PREFIX_thumb_CMR_joint
     joints:
       - HAND_PREFIX_little_MPR_joint
       - HAND_PREFIX_little_MCP_joint
