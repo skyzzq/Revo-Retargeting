@@ -2,6 +2,8 @@
 
 完整接口见 [Documents/接口文档.md](../Documents/接口文档.md)。日常命令见 [Documents/操作指令.md](../Documents/操作指令.md)。
 
+消息定义：`manus_ros2_msgs/msg/ManusGlove.msg`、`revo3_mit_controller_msgs/msg/Revo3MITCommand.msg`。
+
 ```text
 /manus_glove_0
 /manus_glove_1
