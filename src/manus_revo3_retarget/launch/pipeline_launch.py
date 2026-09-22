@@ -4,7 +4,16 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import math
+import os
 import yaml
+
+TASK_ALIASES = {
+    "blocks": "blocks",
+    "block": "blocks",
+    "unbox": "unbox",
+    "unboxing": "unbox",
+    "express": "unbox",
+}
 
 
 NUMERIC_THREAD_ENV_KEYS = (
@@ -57,8 +66,20 @@ def _load_ros_parameters(path):
         merged.update(direct_params)
 
     if merged:
-        return merged
-    return dict(data)
+        return _sanitize_ros_parameters(merged)
+    return _sanitize_ros_parameters(dict(data))
+
+
+def _sanitize_ros_parameters(params):
+    """Drop empty sequences. Humble launch ParameterValue rejects () from YAML []."""
+    cleaned = {}
+    for key, value in params.items():
+        if isinstance(value, tuple):
+            value = list(value)
+        if isinstance(value, list) and not value:
+            continue
+        cleaned[key] = value
+    return cleaned
 
 
 def _create_runtime_nodes(context, *args, **kwargs):
@@ -97,11 +118,18 @@ def _create_runtime_nodes(context, *args, **kwargs):
     left_calibration_config = LaunchConfiguration("left_calibration_config").perform(context)
     right_calibration_config = LaunchConfiguration("right_calibration_config").perform(context)
 
+    enable_keyboard_actions = LaunchConfiguration("enable_keyboard_actions").perform(context).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     overrides = {
         "use_revo3_namespace": use_revo3_namespace,
         "command_topic_suffix": command_topic_suffix,
         "retarget_target_topic_suffix": retarget_target_topic_suffix,
         "mit_command_publish_hz": mit_command_publish_hz,
+        "enable_keyboard_actions": enable_keyboard_actions,
     }
 
     parameter_dicts = [
@@ -110,6 +138,20 @@ def _create_runtime_nodes(context, *args, **kwargs):
         _load_ros_parameters(LaunchConfiguration("four_finger_retarget_config").perform(context)),
         _load_ros_parameters(LaunchConfiguration("spread_retarget_config").perform(context)),
     ]
+    task_config = LaunchConfiguration("task_config").perform(context).strip()
+    if not task_config:
+        task_name = LaunchConfiguration("task").perform(context).strip().lower()
+        task_name = TASK_ALIASES.get(task_name, task_name)
+        if task_name and task_name not in ("none", "off"):
+            package_share = get_package_share_directory("manus_revo3_retarget")
+            task_config = os.path.join(package_share, "config", "profiles", f"{task_name}.yaml")
+    if task_config:
+        if not os.path.isfile(task_config):
+            raise ValueError(f"Task profile not found: {task_config}")
+        parameter_dicts.append(_load_ros_parameters(task_config))
+    keyboard_actions_config = LaunchConfiguration("keyboard_actions_config").perform(context)
+    if enable_keyboard_actions and keyboard_actions_config.strip():
+        parameter_dicts.append(_load_ros_parameters(keyboard_actions_config))
     if retarget_config:
         parameter_dicts.append(_load_ros_parameters(retarget_config))
     common_parameter_dicts = list(parameter_dicts)
@@ -209,6 +251,16 @@ def generate_launch_description():
             description="Set numeric library thread env vars for compatibility. Use 0 to leave existing env unchanged.",
         ),
         DeclareLaunchArgument(
+            "task",
+            default_value="blocks",
+            description="Task profile overlay: blocks (hold unused fingers) or unbox (all fingers, firmer grasp).",
+        ),
+        DeclareLaunchArgument(
+            "task_config",
+            default_value="",
+            description="Optional explicit task overlay YAML. Empty → config/profiles/<task>.yaml.",
+        ),
+        DeclareLaunchArgument(
             "control_config",
             default_value=PathJoinSubstitution([package_share, "config", "control.yaml"]),
             description="Control, topic, publish-rate, and MIT gain parameter YAML.",
@@ -227,6 +279,16 @@ def generate_launch_description():
             "spread_retarget_config",
             default_value=PathJoinSubstitution([package_share, "config", "spread_retarget.yaml"]),
             description="Spread/MPR retarget parameter YAML.",
+        ),
+        DeclareLaunchArgument(
+            "enable_keyboard_actions",
+            default_value="false",
+            description="Subscribe to keyboard pose commands. Off by default to keep teleop latency low.",
+        ),
+        DeclareLaunchArgument(
+            "keyboard_actions_config",
+            default_value=PathJoinSubstitution([package_share, "config", "keyboard_actions.yaml"]),
+            description="Named keyboard pose commands and interpolation duration. Loaded only when enable_keyboard_actions is true.",
         ),
         DeclareLaunchArgument(
             "retarget_config",

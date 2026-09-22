@@ -126,6 +126,9 @@ protected:
     /// @return true if calibration was loaded successfully, false otherwise.
     bool TryLoadCalibrationForGlove(uint32_t p_GloveId, const GloveLandscapeData& p_Glove);
 
+    /// @brief Apply ~/Documents/manus-licenses/license.lic (or MANUS_LICENSE_FILE) to the first dongle.
+    bool TryApplyDongleLicense();
+
     static ManusDataPublisher *s_Instance;
 
     //Connection type in case of remote m_IP is used, if empty auto discovery is used
@@ -135,6 +138,7 @@ protected:
     // Calibration directory for auto-loading .mcal files.
     std::string m_CalibrationDirectory;
     std::set<uint32_t> m_CalibratedGloves;
+    bool m_LicenseApplyAttempted = false;
 
     //Coordinate system settings
     bool m_WorldSpace = true;

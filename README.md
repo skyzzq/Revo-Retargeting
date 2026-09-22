@@ -131,6 +131,12 @@ Both hands:
 
 `Ctrl-C` stops all process groups started by the script.
 
+Keyboard pose commands are off by default. To enable them:
+
+```bash
+ENABLE_KEYBOARD_ACTIONS=1 ./scripts/teleop.sh left enable_keyboard_actions:=true
+```
+
 ## Useful Script Options
 
 Start only the Revo3 driver:

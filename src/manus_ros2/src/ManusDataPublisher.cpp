@@ -3,12 +3,14 @@
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
 #include <thread>
+#include <vector>
 
 #include "CalibrationFiles.hpp"
 #include "ClientLogging.hpp"
@@ -291,31 +293,45 @@ void ManusDataPublisher::PublishCallback()
 
     static bool s_LicenseErrorShown = false;
 
-    if (!s_LicenseErrorShown)
+    if (m_Landscape->gloveDevices.dongleCount == 0)
     {
-        if (m_Landscape->gloveDevices.dongleCount == 0)
+        return;
+    }
+
+    const bool has_required_license =
+        (m_ConnectionType == ConnectionType::ConnectionType_Integrated)
+            ? m_Landscape->settings.license.integrated
+            : m_Landscape->settings.license.sdk;
+
+    if (!has_required_license)
+    {
+        if (!m_LicenseApplyAttempted)
         {
-            return;
+            m_LicenseApplyAttempted = true;
+            if (TryApplyDongleLicense())
+            {
+                // Landscape will refresh after a successful SetLicense.
+                return;
+            }
         }
 
-        if (m_ConnectionType != ConnectionType::ConnectionType_Integrated)
+        if (!s_LicenseErrorShown)
         {
-            if (!m_Landscape->settings.license.sdk)
+            if (m_ConnectionType == ConnectionType::ConnectionType_Integrated)
             {
-                ClientLog::error("It looks like you don't have a valid SDK license. Please connect a valid license key.");
-                s_LicenseErrorShown = true;
-                return;
+                ClientLog::error(
+                    "It looks like you don't have a valid SDK Integrated license. "
+                    "Install with: ./scripts/install_manus_license.sh /path/to/file.lic");
             }
-        }
-        else
-        {
-            if (!m_Landscape->settings.license.integrated)
+            else
             {
-                ClientLog::error("It looks like you don't have a valid SDK Integrated license. Please connect a valid license key.");
-                s_LicenseErrorShown = true;
-                return;
+                ClientLog::error(
+                    "It looks like you don't have a valid SDK license. "
+                    "Install with: ./scripts/install_manus_license.sh /path/to/file.lic");
             }
+            s_LicenseErrorShown = true;
         }
+        return;
     }
     for (size_t i = 0; i < m_Landscape->gloveDevices.gloveCount; i++)
     {
@@ -956,5 +972,82 @@ bool ManusDataPublisher::TryLoadCalibrationForGlove(uint32_t p_GloveId, const Gl
     ClientLog::print(
         "Successfully loaded calibration for {} {} glove (ID: {}) from {}",
         t_FamilyStr.c_str(), t_SideStr.c_str(), p_GloveId, t_SelectedFile->string().c_str());
+    return true;
+}
+
+bool ManusDataPublisher::TryApplyDongleLicense()
+{
+    if (m_Landscape == nullptr || m_Landscape->gloveDevices.dongleCount == 0)
+    {
+        return false;
+    }
+
+    std::filesystem::path license_path;
+    if (const char * env_path = std::getenv("MANUS_LICENSE_FILE");
+        env_path != nullptr && env_path[0] != '\0')
+    {
+        license_path = ExpandPath(env_path);
+    }
+    else
+    {
+        license_path = ExpandPath("~/Documents/manus-licenses/license.lic");
+    }
+
+    if (!std::filesystem::exists(license_path))
+    {
+        ClientLog::error(
+            "MANUS license file not found: {}. "
+            "Run ./scripts/install_manus_license.sh /path/to/file.lic",
+            license_path.string().c_str());
+        return false;
+    }
+
+    std::ifstream input(license_path, std::ios::binary | std::ios::ate);
+    if (!input.is_open())
+    {
+        ClientLog::error("Failed to open MANUS license file: {}", license_path.string().c_str());
+        return false;
+    }
+
+    const std::streamsize size = input.tellg();
+    input.seekg(0, std::ios::beg);
+    if (size <= 0)
+    {
+        ClientLog::error("MANUS license file is empty: {}", license_path.string().c_str());
+        return false;
+    }
+
+    std::vector<char> buffer(static_cast<size_t>(size));
+    if (!input.read(buffer.data(), size))
+    {
+        ClientLog::error("Failed to read MANUS license file: {}", license_path.string().c_str());
+        return false;
+    }
+
+    const uint32_t dongle_id = m_Landscape->gloveDevices.dongles[0].id;
+    bool success = false;
+    char response[MAX_NUM_CHARS_IN_RESPONSE] = {};
+    const SDKReturnCode result = CoreSdk_SetLicense(
+        dongle_id,
+        buffer.data(),
+        static_cast<uint32_t>(buffer.size()),
+        &success,
+        response);
+
+    if (result != SDKReturnCode::SDKReturnCode_Success || !success)
+    {
+        ClientLog::error(
+            "Failed to apply MANUS license from {} to dongle {}. SDK={}, response={}",
+            license_path.string().c_str(),
+            dongle_id,
+            static_cast<int32_t>(result),
+            response[0] != '\0' ? response : "n/a");
+        return false;
+    }
+
+    ClientLog::print(
+        "Applied MANUS license from {} to dongle {}",
+        license_path.string().c_str(),
+        dongle_id);
     return true;
 }

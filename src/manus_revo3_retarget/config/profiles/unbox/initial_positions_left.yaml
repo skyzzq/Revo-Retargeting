@@ -1,0 +1,23 @@
+# Open-hand initial positions for the unbox task (left).
+initial_positions:
+  left_little_MPR_joint: 0.0
+  left_little_MCP_joint: 0.0
+  left_little_PIP_joint: 0.0
+  left_little_DIP_joint: 0.0
+  left_ring_MPR_joint: 0.0
+  left_ring_MCP_joint: 0.0
+  left_ring_PIP_joint: 0.0
+  left_ring_DIP_joint: 0.0
+  left_middle_MPR_joint: 0.0
+  left_middle_MCP_joint: 0.0
+  left_middle_PIP_joint: 0.0
+  left_middle_DIP_joint: 0.0
+  left_index_MPR_joint: 0.0
+  left_index_MCP_joint: 0.0
+  left_index_PIP_joint: 0.0
+  left_index_DIP_joint: 0.0
+  left_thumb_MCP_joint: 0.0
+  left_thumb_PIP_joint: 0.0
+  left_thumb_DIP_joint: 0.0
+  left_thumb_CMP_joint: 0.0
+  left_thumb_CMR_joint: 0.0

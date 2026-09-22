@@ -1,0 +1,11 @@
+---
+# Task overlay: parcel unboxing. Loaded after control.yaml.
+# All fingers follow the glove; higher MIT gains for a firmer grasp.
+manus_revo3_retarget:
+  ros__parameters:
+    hold_unused_fingers: false
+    # Do not set hold_*_fingers: [] — ROS 2 launch rejects empty YAML lists
+    # (they become tuples). hold_unused_fingers=false already skips the hold.
+    pinch_soften_enabled: false
+    mit_default_kp: 2.8
+    mit_default_kd: 0.6

@@ -181,7 +181,7 @@ extern "C"
 /// @brief Used to descriptively refer to the max number of skeletons for each session.
 /// Used with arrays and loops to make them more descriptive than simply using
 /// the number, and to make changing the number easier and safer.
-#define MAX_NUMBER_OF_SKELETONS_PER_SESSION	32
+#define MAX_NUMBER_OF_SKELETONS_PER_SESSION	32	
 
 /// @brief Used to descriptively refer to the max length of a skeleton name string.
 /// Used with arrays to make them more descriptive than simply using
@@ -288,7 +288,7 @@ typedef enum SDKReturnCode
 
 	/// Skeleton could not be loaded. usually when using more then the max skeletons per session (32).
 	SDKReturnCode_SkeletonNotLoaded,
-
+	
 	/// Function not available for this version of the SDK
 	SDKReturnCode_FunctionNotAvailable,
 
@@ -373,7 +373,7 @@ typedef enum DeviceClassType
 	DeviceClassType_Glongle
 } DeviceClassType;
 
-/// @brief Describes the different types of Manus devices.
+/// @brief Describes the different types of Manus devices. 
 typedef enum DeviceFamilyType
 {
 	DeviceFamilyType_Unknown,
@@ -469,7 +469,7 @@ typedef enum ExtraTrackerOffsetType
 	ExtraTrackerOffsetType_MAX_SIZE // Warning, this value is used to define the UserProfile.TrackerOffset[SIZE]
 } ExtraTrackerOffsetType;
 
-/// @brief Describes the different types of body measurement units.
+/// @brief Describes the different types of body measurement units. 
 typedef enum MeasurementUnit
 {
 	MeasurementUnit_Meters,
@@ -486,7 +486,7 @@ typedef enum MeasurementCategory
 	MeasurementCategory_Body,
 } MeasurementCategory;
 
-/// @brief Describes the different possibilities for the update status.
+/// @brief Describes the different possibilities for the update status. 
 typedef enum UpdateStatusEnum
 {
 	UpdateStatusEnum_Unknown,
@@ -500,7 +500,7 @@ typedef enum UpdateStatusEnum
 	UpdateStatusEnum_UpdatingFailed,
 } UpdateStatusEnum;
 
-/// @brief Describes the different skeleton types.
+/// @brief Describes the different skeleton types. 
 typedef enum SkeletonType
 {
 	SkeletonType_Invalid,
@@ -639,18 +639,18 @@ typedef enum AxisPolarity
 	AxisPolarity_PositiveZ
 } AxisPolarity;
 
-/// @brief Describes the possible types for system messages received from core.
+/// @brief Describes the possible types for system messages received from core. 
 typedef enum SystemMessageType
 {
 	SystemMessageType_Unknown,
 	SystemMessageType_LibDebugReplugDongle,
 	SystemMessageType_LibDebugRxStall,
 	SystemMessageType_LibDebugTxStall,
-
+	
 	SystemMessageType_TrackerError,
 	SystemMessageType_TrackerOk,
 	SystemMessageType_TrackerSystemOutOfDate,
-
+	
 	SystemMessageType_GloveSanityErrorPSOCInit,
 	SystemMessageType_GloveSanityErrorQCBatV,
 	SystemMessageType_GloveSanityErrorQCLRACalib,
@@ -659,7 +659,7 @@ typedef enum SystemMessageType
 	SystemMessageType_GloveSanityErrorQCIMUCalib,
 	SystemMessageType_GloveSanityErrorQCID,
 	SystemMessageType_GloveSanityErrorQCInterCPU,
-
+	
 	SystemMessageType_SessionConnectionVersionMismatch,
 
 	SystemMessageType_TemporarySkeletonModified,
@@ -777,7 +777,7 @@ typedef enum FingerJointType
 	FingerJointType_Metacarpal,
 	FingerJointType_Proximal,
 	FingerJointType_Intermediate,
-	FingerJointType_Distal, //thumb doesn't have it
+	FingerJointType_Distal, //thumb doesn't have it 
 	FingerJointType_Tip
 }FingerJointType;
 
@@ -885,7 +885,7 @@ typedef struct FirmwareVersion
 } FirmwareVersion;
 
 /// @brief Stores a single version string.
-typedef struct ManusVersion
+typedef struct ManusVersion 
 {
 	char versionInfo[MAX_NUM_CHARS_IN_VERSION];
 } ManusVersion;
@@ -919,8 +919,8 @@ typedef struct TrackerData
 
 	TrackerId trackerId;
 
-	uint32_t userId; //default = 0;
-
+	uint32_t userId; //default = 0; 
+	
 	bool isHmd; //default = false;
 	TrackerType trackerType; //default = TrackerType::TrackerType_Unknown;
 
@@ -931,7 +931,7 @@ typedef struct TrackerData
 } TrackerData;
 
 
-/// @brief Stores the information sent by the tracker stream.
+/// @brief Stores the information sent by the tracker stream. 
 typedef struct TrackerStreamInfo
 {
 	ManusTimestamp publishTime; //default = 0;	//	DateTime.UtcNow.
@@ -976,7 +976,7 @@ typedef struct GestureStreamInfo
 // Skeleton Stream
 // ------------------------------------------------------------------------------------------------------------------------------
 
-/// @brief Stores the information regarding each skeleton node.
+/// @brief Stores the information regarding each skeleton node. 
 /// The transform is defined as a local or global transform depending on the coordinate system set when initializing the SDK.
 /// See functions CoreSdk_InitializeCoordinateSystemWithVUH and CoreSdk_InitializeCoordinateSystemWithDirection.
 typedef struct SkeletonNode
@@ -1001,7 +1001,7 @@ typedef struct RawSkeletonInfo
 	ManusTimestamp publishTime; //default = 0;	//	DateTime.UtcNow.
 } RawSkeletonInfo;
 
-/// @brief Stores the information sent by the skeleton stream.
+/// @brief Stores the information sent by the skeleton stream. 
 typedef struct SkeletonStreamInfo
 {
 	ManusTimestamp publishTime; //default = 0;	//	DateTime.UtcNow.
@@ -1093,7 +1093,7 @@ typedef struct DongleLandscapeData
 	uint32_t licenseMaxNumberOfGlovePairs;
 
 	uint32_t netDeviceID;
-
+	
 } DongleLandscapeData;
 
 /// @brief Stores all the received glove data.
@@ -1250,7 +1250,7 @@ typedef struct LicenseInfo
 	bool vredSession; //default = false;
 	bool integrated; //default = false;
 	bool cortexSession; //default = false;
-	bool fzMotionSession; //default = false;
+	bool fzMotionSession; //default = false; 
 	bool worldVizSession; //default = false;
 	bool noraxonSession; //default = false;
 	bool noitomSession; //default = false;
@@ -1370,7 +1370,7 @@ typedef struct NodeSettings
 } NodeSettings;
 
 /// @brief Stores the node setup information. Each node represents a segment of the skeleton that can be animated, nodes combine together to form chains.
-/// the parentID is used to identify the node with respect to which the current one will move.
+/// the parentID is used to identify the node with respect to which the current one will move. 
 typedef struct NodeSetup
 {
 	uint32_t id; //default = 0;
@@ -1704,7 +1704,7 @@ typedef struct GloveCalibrationStepData {
 // Coordinate system settings
 // ------------------------------------------------------------------------------------------------------------------------------
 
-/// @brief Stores the information regarding the coordinate system used by the client, defined as VUH (view, up, handedness).
+/// @brief Stores the information regarding the coordinate system used by the client, defined as VUH (view, up, handedness). 
 typedef struct CoordinateSystemVUH
 {
 	AxisView view;

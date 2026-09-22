@@ -1,0 +1,87 @@
+---
+# Keyboard-triggered pose commands for teleop.
+# Values are desired MIT command joint angles in degrees.
+# These poses are sent as-is (glove output calibration is not applied).
+# Missing joints default to 0. Per-side override:
+#   action_<name>_<side>_<joint>_deg
+manus_revo3_retarget:
+  ros__parameters:
+    action_command_topic: /manus_revo3_retarget/action_command
+    action_interpolation_duration_s: 0.6
+
+    # --- fist ---
+    action_fist_little_MCP_joint_deg: 65.0
+    action_fist_little_PIP_joint_deg: 75.0
+    action_fist_little_DIP_joint_deg: 50.0
+    action_fist_ring_MCP_joint_deg: 65.0
+    action_fist_ring_PIP_joint_deg: 75.0
+    action_fist_ring_DIP_joint_deg: 50.0
+    action_fist_middle_MCP_joint_deg: 65.0
+    action_fist_middle_PIP_joint_deg: 75.0
+    action_fist_middle_DIP_joint_deg: 50.0
+    action_fist_index_MCP_joint_deg: 65.0
+    action_fist_index_PIP_joint_deg: 75.0
+    action_fist_index_DIP_joint_deg: 50.0
+    action_fist_thumb_MCP_joint_deg: 35.0
+    action_fist_thumb_PIP_joint_deg: 45.0
+    action_fist_thumb_DIP_joint_deg: 35.0
+    action_fist_thumb_CMP_joint_deg: 20.0
+    action_fist_left_thumb_CMR_joint_deg: 20.0
+    action_fist_right_thumb_CMR_joint_deg: -20.0
+
+    # --- pinch (index + thumb) ---
+    action_pinch_little_MCP_joint_deg: 68.0
+    action_pinch_little_PIP_joint_deg: 78.0
+    action_pinch_little_DIP_joint_deg: 52.0
+    action_pinch_ring_MCP_joint_deg: 68.0
+    action_pinch_ring_PIP_joint_deg: 78.0
+    action_pinch_ring_DIP_joint_deg: 52.0
+    action_pinch_middle_MCP_joint_deg: 68.0
+    action_pinch_middle_PIP_joint_deg: 78.0
+    action_pinch_middle_DIP_joint_deg: 52.0
+    action_pinch_index_MCP_joint_deg: 32.0
+    action_pinch_index_PIP_joint_deg: 38.0
+    action_pinch_index_DIP_joint_deg: 22.0
+    action_pinch_thumb_MCP_joint_deg: 22.0
+    action_pinch_thumb_PIP_joint_deg: 28.0
+    action_pinch_thumb_DIP_joint_deg: 18.0
+    action_pinch_thumb_CMP_joint_deg: 32.0
+    action_pinch_left_thumb_CMR_joint_deg: 30.0
+    action_pinch_right_thumb_CMR_joint_deg: -30.0
+
+    # --- point (index extended) ---
+    action_point_little_MCP_joint_deg: 65.0
+    action_point_little_PIP_joint_deg: 75.0
+    action_point_little_DIP_joint_deg: 50.0
+    action_point_ring_MCP_joint_deg: 65.0
+    action_point_ring_PIP_joint_deg: 75.0
+    action_point_ring_DIP_joint_deg: 50.0
+    action_point_middle_MCP_joint_deg: 65.0
+    action_point_middle_PIP_joint_deg: 75.0
+    action_point_middle_DIP_joint_deg: 50.0
+    action_point_thumb_MCP_joint_deg: 28.0
+    action_point_thumb_PIP_joint_deg: 38.0
+    action_point_thumb_DIP_joint_deg: 28.0
+    action_point_thumb_CMP_joint_deg: 12.0
+    action_point_left_thumb_CMR_joint_deg: 12.0
+    action_point_right_thumb_CMR_joint_deg: -12.0
+
+    # --- ok (index-thumb circle) ---
+    action_ok_little_MCP_joint_deg: 15.0
+    action_ok_little_PIP_joint_deg: 20.0
+    action_ok_little_DIP_joint_deg: 12.0
+    action_ok_ring_MCP_joint_deg: 15.0
+    action_ok_ring_PIP_joint_deg: 20.0
+    action_ok_ring_DIP_joint_deg: 12.0
+    action_ok_middle_MCP_joint_deg: 20.0
+    action_ok_middle_PIP_joint_deg: 25.0
+    action_ok_middle_DIP_joint_deg: 15.0
+    action_ok_index_MCP_joint_deg: 48.0
+    action_ok_index_PIP_joint_deg: 55.0
+    action_ok_index_DIP_joint_deg: 38.0
+    action_ok_thumb_MCP_joint_deg: 25.0
+    action_ok_thumb_PIP_joint_deg: 32.0
+    action_ok_thumb_DIP_joint_deg: 22.0
+    action_ok_thumb_CMP_joint_deg: 28.0
+    action_ok_left_thumb_CMR_joint_deg: 28.0
+    action_ok_right_thumb_CMR_joint_deg: -28.0
